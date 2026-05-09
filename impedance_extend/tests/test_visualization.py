@@ -1,7 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from impedance.visualization import plot_altair, plot_bode, plot_nyquist
-from impedance.visualization import plot_residuals
+from impedance_extend.visualization import plot_altair, plot_bode, \
+                                                plot_nyquist
+from impedance_extend.visualization import plot_residuals
 import json
 
 

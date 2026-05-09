@@ -1,6 +1,7 @@
 from .fitting import circuit_fit, buildCircuit
 from .fitting import calculateCircuitLength, check_and_eval
-from impedance.visualization import plot_altair, plot_bode, plot_nyquist
+from impedance_extend.visualization import plot_altair, plot_bode, \
+                                                    plot_nyquist
 from .elements import circuit_elements, get_element_from_name
 
 import json
@@ -11,7 +12,7 @@ import warnings
 
 class BaseCircuit:
     """ Base class for equivalent circuit models """
-    def __init__(self, initial_guess=[], constants=None, name=None):
+    def __init__(self, initial_guess=None, constants=None, name=None):
         """ Base constructor for any equivalent circuit model
 
         Parameters
@@ -27,6 +28,8 @@ class BaseCircuit:
             Name for the circuit
         """
 
+        if initial_guess is None:
+            initial_guess = []
         # if supplied, check that initial_guess is valid and store
         initial_guess = [x for x in initial_guess if x is not None]
         for i in initial_guess:
@@ -81,7 +84,7 @@ class BaseCircuit:
 
         kwargs :
             Keyword arguments passed to
-            impedance.models.circuits.fitting.circuit_fit,
+            impedance_extend.models.circuits.fitting.circuit_fit,
             and subsequently to scipy.optimize.curve_fit
             or scipy.optimize.basinhopping
 
@@ -134,14 +137,15 @@ class BaseCircuit:
             Predicted impedance at each frequency
         """
         frequencies = np.array(frequencies, dtype=float)
-        buildCircuit_text=buildCircuit(self.circuit, constants=self.constants, 
-                            eval_string='', index=0)[0]
-        builtCircuit = eval('lambda frequencies,parameters : ' +  buildCircuit_text, circuit_elements)
+        buildCircuit_text = buildCircuit(
+            self.circuit, constants=self.constants, eval_string='', index=0)[0]
+        builtCircuit = eval('lambda frequencies,parameters : ' +
+                            buildCircuit_text, circuit_elements)
         if self._is_fit() and not use_initial:
-            return builtCircuit(frequencies,self.parameters_)
+            return builtCircuit(frequencies, self.parameters_)
         else:
             warnings.warn("Simulating circuit based on initial parameters")
-            return builtCircuit(frequencies,self.initial_guess)
+            return builtCircuit(frequencies, self.initial_guess)
 
     def get_param_names(self):
         """ Converts circuit string to names and units """

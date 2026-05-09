@@ -1,5 +1,5 @@
 Circuits
 ========
 
-.. automodule:: impedance.models.circuits.circuits
+.. automodule:: impedance_extendmodels.circuits.circuits
    :members:

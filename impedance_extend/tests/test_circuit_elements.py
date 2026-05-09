@@ -4,9 +4,10 @@ import warnings
 import numpy as np
 import pytest
 
-from impedance.models.circuits.elements import (OverwriteError,
-                                                circuit_elements, element, p,
-                                                s, ElementError)
+from impedance_extend.models.circuits.elements import OverwriteError, \
+                                                            circuit_elements, \
+                                                            element, p, s, \
+                                                            ElementError
 
 
 def test_each_element():
@@ -70,9 +71,9 @@ def test_each_element():
             (6.332569967499333e-08 - 7.957742115295703e-05j),
         ],
         "Zarc": [
-            (0.08900974-0.00486384j),
-            (0.04818879-0.01198904j),
-            (0.00969182-0.00436265j),
+            (0.08900974 - 0.00486384j),
+            (0.04818879 - 0.01198904j),
+            (0.00969182 - 0.00436265j),
         ],
     }
     input_vals = [0.1, 0.2, 0.3, 0.4]

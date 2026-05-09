@@ -1,5 +1,5 @@
 Preprocessing
 =============
 
-.. automodule:: impedance.preprocessing
+.. automodule:: impedance_extendpreprocessing
    :members:

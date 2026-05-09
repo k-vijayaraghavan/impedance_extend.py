@@ -16,12 +16,12 @@ import os
 import sys
 sys.path.insert(0, os.path.abspath('../../'))
 
-from impedance import __version__  # noqa
+from impedance_extend import __version__  # noqa
 
 # -- Project information -----------------------------------------------------
 
-project = 'impedance.py'
-copyright = '2021, impedance.py developers'
+project = 'impedance_extend.py'
+copyright = '2026, impedance_extend.py developers'
 author = ''
 
 # The short X.Y version
@@ -113,7 +113,7 @@ html_static_path = ['_static']
 # -- Options for HTMLHelp output ---------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = 'impedancedoc'
+htmlhelp_basename = 'impedance_extenddoc'
 
 
 # -- Options for LaTeX output ------------------------------------------------
@@ -140,8 +140,8 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'impedance.tex', 'impedance.py Documentation',
-     'Name', 'manual'),
+    (master_doc, 'impedance_extend.tex',
+     'impedance_extend.py Documentation', 'Name', 'manual'),
 ]
 
 
@@ -150,8 +150,8 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'impedance', 'impedance.py Documentation',
-     [author], 1)
+    (master_doc, 'impedance_extend',
+     'impedance_extend.py Documentation', [author], 1)
 ]
 
 
@@ -161,8 +161,9 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'impedance', 'impedance.py Documentation',
-     author, 'impedance', 'One line description of project.',
+    (master_doc, 'impedance_extend',
+     'impedance_extend.py Documentation', author,
+     'impedance_extend', 'One line description of project.',
      'Miscellaneous'),
 ]
 

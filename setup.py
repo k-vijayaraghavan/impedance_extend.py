@@ -1,13 +1,13 @@
-from impedance import __version__
+from impedance_extend import __version__
 import setuptools
 
 with open("README.md", "r", encoding='utf8') as fh:
     long_description = fh.read()
 
 setuptools.setup(
-    name="impedance",
+    name="impedance_extend",
     version=__version__,
-    author="impedance.py developers",
+    author="impedance_extend.py developers",
     author_email="matt.murbach@gmail.com",
     description="A package for analyzing electrochemical impedance data",
     long_description=long_description,

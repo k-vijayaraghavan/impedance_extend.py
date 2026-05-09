@@ -1,6 +1,8 @@
-from impedance.preprocessing import readFile, readGamry, readZPlot, \
-                                    readBioLogic, ignoreBelowX, \
-                                    cropFrequencies, readCSV, saveCSV
+from impedance_extend.preprocessing import readFile, readGamry, \
+                                                readZPlot, readBioLogic, \
+                                                ignoreBelowX, \
+                                                cropFrequencies, readCSV, \
+                                                saveCSV
 import numpy as np
 import os
 import pytest

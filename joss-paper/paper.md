@@ -76,15 +76,15 @@ The documentation for `impedance.py` contains [a guide on getting started](https
 
 ```python
 # 1. loading in data:
-from impedance.preprocessing import readFile
+from impedance_extend.preprocessing import readFile
 f, Z = readFile('exampleData.csv')
 
 # 2. remove positive imaginary impedance data:
-from impedance.preprocessing import ignoreBelowX
+from impedance_extend.preprocessing import ignoreBelowX
 f, Z = ignoreBelowX(f, Z)
 
 # 3. importing and initializing a circuit:
-from impedance.models.circuits import CustomCircuit
+from impedance_extend.models.circuits import CustomCircuit
 initial_guess = [1e-8, .01, .005, .1, .9, .005, .1, 200, .1, .9]
 circuit = CustomCircuit('L_0-R_0-p(R_1,CPE_1)-p(R_2-Wo_1,CPE_2)',
                         initial_guess=initial_guess)

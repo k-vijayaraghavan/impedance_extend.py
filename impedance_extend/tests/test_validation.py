@@ -1,6 +1,8 @@
-from impedance.validation import calc_mu, eval_linKK, residuals_linKK
-from impedance.validation import get_tc_distribution, linKK, fit_linKK
-from impedance import preprocessing
+from impedance_extend.validation import calc_mu, eval_linKK, \
+                                            residuals_linKK
+from impedance_extend.validation import get_tc_distribution, linKK, \
+                                            fit_linKK
+from impedance_extend import preprocessing
 import numpy as np
 import pytest
 
@@ -120,7 +122,7 @@ def test_linKK():
                   -1.76037019e+01, -8.62054511e+00,  5.36182534e-01,
                   7.21647174e+00, 9.37882405e+00]) * 1j
 
-    f, Z = preprocessing.readZPlot('../impedance.py/data/Circuit3_EIS_1.z')
+    f, Z = preprocessing.readZPlot('./data/Circuit3_EIS_1.z')
 
     resids_true_re = (Z - fit_true).real / np.abs(Z)
     resids_true_im = (Z - fit_true).imag / np.abs(Z)
@@ -221,7 +223,7 @@ def test_fit_linKK():
                   29.59329382, -6.05425717, -39.59351444, -69.9122427,
                   -95.18725792, -113.19938882, -120.94168923]) * 1j
 
-    f, Z = preprocessing.readZPlot('../impedance.py/data/Circuit3_EIS_1.z')
+    f, Z = preprocessing.readZPlot('./data/Circuit3_EIS_1.z')
     taus = get_tc_distribution(f, 5)
 
     # improper data types in fitting raise a TypeError

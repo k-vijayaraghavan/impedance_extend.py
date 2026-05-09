@@ -1,6 +1,6 @@
 import numpy as np
-from impedance.models.circuits.fitting import rmse
-from impedance.models.circuits.elements import circuit_elements, K  # noqa
+from impedance_extend.models.circuits.fitting import rmse
+from impedance_extend.models.circuits.elements import circuit_elements, K  # noqa
 
 
 def linKK(f, Z, c=0.85, max_M=50, fit_type='real', add_cap=False):

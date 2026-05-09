@@ -1,5 +1,5 @@
 import numpy as np
-from impedance.models.circuits import CustomCircuit
+from impedance_extend.models.circuits import CustomCircuit
 import os
 
 

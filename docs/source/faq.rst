@@ -1,7 +1,7 @@
 Frequently Asked Questions
 ==========================
 
-What method does impedance.py use for fitting equivalent circuit models?
+What method does impedance_extendpy use for fitting equivalent circuit models?
 ------------------------------------------------------------------------
 By default, fitting is performed by non-linear least squares regression of
 the circuit model to impedance data via
@@ -30,7 +30,7 @@ EIS fitting can be prone to this issue given the high dimensionality
 of typical equivalent circuit models.
 `Global optimization algorithms <https://en.wikipedia.org/wiki/Global_optimization>`_
 attempt to search the entire parameter landscape to minimize the error.
-By setting :code:`global_opt=True` in :code:`circuit_fit`, :code:`impedance.py` will use the
+By setting :code:`global_opt=True` in :code:`circuit_fit`, :code:`impedance_extendpy` will use the
 `basinhopping <https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.basinhopping.html>`_
 global optimization algorithm (also from the `scipy.optimize` package[1]) instead of :code:`curve_fit`.
 Note that the computational time may increase.
@@ -39,13 +39,13 @@ Note that the computational time may increase.
 SciPy 1.0: fundamental algorithms for scientific computing in Python.
 Nat Methods 17, 261–272 (2020). `doi: 10.1038/s41592-019-0686-2 <https://doi.org/10.1038/s41592-019-0686-2>`_
 
-How do I cite impedance.py?
+How do I cite impedance_extendpy?
 ---------------------------
 
 .. image:: https://joss.theoj.org/papers/10.21105/joss.02349/status.svg
     :target: https://doi.org/10.21105/joss.02349
 
-If you use impedance.py in published work, please consider citing https://joss.theoj.org/papers/10.21105/joss.02349 as
+If you use impedance_extendpy in published work, please consider citing https://joss.theoj.org/papers/10.21105/joss.02349 as
 
 .. code:: text
 
@@ -58,11 +58,11 @@ If you use impedance.py in published work, please consider citing https://joss.t
         number = {52},
         pages = {2349},
         author = {Matthew D. Murbach and Brian Gerwe and Neal Dawson-Elli and Lok-kun Tsui},
-        title = {impedance.py: A Python package for electrochemical impedance analysis},
+        title = {impedance_extendpy: A Python package for electrochemical impedance analysis},
         journal = {Journal of Open Source Software}
     }
 
-How can I contribute to impedance.py?
+How can I contribute to impedance_extendpy?
 -------------------------------------
 
 First off, thank you for your interest in contributing to the
@@ -74,7 +74,7 @@ Feature requests and bug reports
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 If you want to make a suggestion for a new feature, please `make an
-issue <https://github.com/ECSHackWeek/impedance.py/issues/new/choose>`_
+issue <https://github.com/ECSHackWeek/impedance_extendpy/issues/new/choose>`_
 including as much detail as possible. If you're requesting a
 new circuit element or data file type, there are special issue templates
 that you can select and use.
@@ -82,10 +82,10 @@ that you can select and use.
 Contributing code
 ~~~~~~~~~~~~~~~~~
 
-The prefered method for contributing code to impedance.py is to fork
+The prefered method for contributing code to impedance_extendpy is to fork
 the repository on GitHub and submit a "pull request" (PR).
-More detailed information on how to get started developing impedance.py
+More detailed information on how to get started developing impedance_extendpy
 can be found in
-`CONTRBUTING.md <https://github.com/ECSHackWeek/impedance.py/blob/master/CONTRIBUTING.md>`_.
+`CONTRBUTING.md <https://github.com/ECSHackWeek/impedance_extendpy/blob/master/CONTRIBUTING.md>`_.
 
 Feel free to reach out via GitHub issues with any questions!

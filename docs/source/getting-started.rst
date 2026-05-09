@@ -1,14 +1,14 @@
 =========================================
-Getting started with :code:`impedance.py`
+Getting started with :code:`impedance_extendpy`
 =========================================
 
-:code:`impedance.py` is a Python package for analyzing electrochemical impedance
+:code:`impedance_extendpy` is a Python package for analyzing electrochemical impedance
 spectroscopy (EIS) data. The following steps will show you how to get started
-analyzing your own data using :code:`impedance.py` in a Jupyter notebook.
+analyzing your own data using :code:`impedance_extendpy` in a Jupyter notebook.
 
 .. hint::
   If you get stuck or believe you have found a bug, please feel free to open an
-  `issue on GitHub <https://github.com/ECSHackWeek/impedance.py/issues>`_.
+  `issue on GitHub <https://github.com/ECSHackWeek/impedance_extendpy/issues>`_.
 
 Step 1: Installation
 ====================
@@ -59,12 +59,12 @@ install anything into it by using:
    conda activate impedance-analysis
 
 We've now activated our conda environment and are ready to install
-:code:`impedance.py`!
+:code:`impedance_extendpy`!
 
 Installing packages
 -------------------
 
-The easiest way to install :code:`impedance.py` and it's dependencies
+The easiest way to install :code:`impedance_extendpy` and it's dependencies
 (:code:`scipy`, :code:`numpy`, and :code:`matplotlib`) is from
 `PyPI <https://pypi.org/project/impedance/>`_ using pip:
 
@@ -116,7 +116,7 @@ For this dataset which simply contains impedance data in three columns (frequenc
 
 .. code-block:: python
 
-  from impedance import preprocessing
+  from parameterized_impedance import preprocessing
 
   # Load data from the example EIS data
   frequencies, Z = preprocessing.readCSV('./exampleData.csv')
@@ -131,7 +131,7 @@ Step 3: Define your impedance model
 ===================================
 
 Next we want to define our impedance model. In order to enable a wide variety
-of researchers to use the tool, :code:`impedance.py` allows you to define a
+of researchers to use the tool, :code:`impedance_extendpy` allows you to define a
 custom circuit with any combination of `circuit elements <circuit-elements.html>`_.
 
 The circuit is defined as a string (i.e. using :code:`''` in Python), where elements in
@@ -154,7 +154,7 @@ circuit string and initial guesses.
 
 .. code-block:: python
 
-  from impedance.models.circuits import CustomCircuit
+  from parameterized_impedance_extendmodels.circuits import CustomCircuit
 
   circuit = 'R0-p(R1,C1)-p(R2-Wo1,C2)'
   initial_guess = [.01, .01, 100, .01, .05, 100, 1]
@@ -202,7 +202,7 @@ To easily visualize the fit, the :code:`plot_nyquist()` function can be handy.
 .. code-block:: python
 
   import matplotlib.pyplot as plt
-  from impedance.visualization import plot_nyquist
+  from parameterized_impedance_extendvisualization import plot_nyquist
 
   fig, ax = plt.subplots()
   plot_nyquist(Z, fmt='o', scale=10, ax=ax)
@@ -214,4 +214,4 @@ To easily visualize the fit, the :code:`plot_nyquist()` function can be handy.
 .. image:: _static/example_fit_fig.png
 
 .. important::
-  🎉 Congratulations! You're now up and running with impedance.py 🎉
+  🎉 Congratulations! You're now up and running with impedance_extendpy 🎉
