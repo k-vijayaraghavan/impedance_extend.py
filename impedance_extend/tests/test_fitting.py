@@ -8,7 +8,6 @@ from impedance_extend.tests.test_preprocessing import Z_correct
 
 import numpy as np
 import re
-import matplotlib.pyplot as plt
 from impedance_extend.models.circuits.elements import circuit_elements
 
 
@@ -164,6 +163,9 @@ def get_data():
     return data
 
 
+rmse_limit = 1e-1
+
+
 def test_circuit_fit_ga():
     data = get_data()
     optimizations = {'algorithm': 'pygad'}
@@ -181,7 +183,8 @@ def test_circuit_fit_ga():
         f = np.array(frequencies, dtype=float)
         Z_fit = builtCircuit(f, calc)
         err = rmse(Z_data, Z_fit)
-        assert np.allclose(results, calc, rtol=1e-1) or err <= rmse_limit, f'Failed {circuit}: {results} != {calc}; RMSE={err}'
+        assert np.allclose(results, calc, rtol=1e-1) or err <= rmse_limit, \
+            f'Failed {circuit}: {results} != {calc}; RMSE={err}'
 
 
 def test_circuit_fit_PSO():
@@ -201,7 +204,8 @@ def test_circuit_fit_PSO():
         f = np.array(frequencies, dtype=float)
         Z_fit = builtCircuit(f, calc)
         err = rmse(Z_data, Z_fit)
-        assert np.allclose(results, calc, rtol=1e-1) or err <= rmse_limit, f'Failed {circuit}: {results} != {calc}; RMSE={err}'
+        assert np.allclose(results, calc, rtol=1e-1) or err <= rmse_limit, \
+            f'Failed {circuit}: {results} != {calc}; RMSE={err}'
 
 
 def test_circuit_fit_callable():
@@ -222,7 +226,8 @@ def test_circuit_fit_callable():
         f = np.array(frequencies, dtype=float)
         Z_fit = builtCircuit(f, calc)
         err = rmse(Z_data, Z_fit)
-        assert np.allclose(results, calc, rtol=1e-1), f'Failed {circuit}: {results} != {calc}; RMSE={err}'
+        assert np.allclose(results, calc, rtol=1e-1), \
+            f'Failed {circuit}: {results} != {calc}; RMSE={err}'
 
 
 def test_circuit_fit_seq():
@@ -243,7 +248,8 @@ def test_circuit_fit_seq():
         f = np.array(frequencies, dtype=float)
         Z_fit = builtCircuit(f, calc)
         err = rmse(Z_data, Z_fit)
-        assert np.allclose(results, calc, rtol=1e-1), f'Failed {circuit}: {results} != {calc}; RMSE={err}'
+        assert np.allclose(results, calc, rtol=1e-1), \
+            f'Failed {circuit}: {results} != {calc}; RMSE={err}'
 
 
 def subsitute_values(buildCircuit_text, frequencies, parameters):
@@ -334,4 +340,3 @@ def test_element_extraction():
     circuit = 'R0-p(RR0,C1)-p(R1,C2032478)-W1'
     extracted_elements = extract_circuit_elements(circuit)
     assert extracted_elements == ['R0', 'RR0', 'C1', 'R1', 'C2032478', 'W1']
-

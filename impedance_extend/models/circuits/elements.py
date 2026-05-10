@@ -166,7 +166,7 @@ def Wo(p, f):
     """
     omega = 2 * np.pi * np.array(f)
     Z0, tau = p[0], p[1]
-    
+
     arg = np.sqrt(1j * omega * tau)
     tanh = np.ones_like(arg, dtype=complex)
     tanh[arg.real <= -100] = -1.0
@@ -193,7 +193,7 @@ def Ws(p, f):
     """
     omega = 2 * np.pi * np.array(f)
     Z0, tau = p[0], p[1]
-    
+
     arg = np.sqrt(1j * omega * tau)
     tanh = np.ones_like(arg, dtype=complex)
     tanh[arg.real <= -100] = -1.0
@@ -302,7 +302,7 @@ def Gs(p, f):
     """
     omega = 2 * np.pi * np.array(f)
     R_G, t_G, phi = p[0], p[1], p[2]
-    
+
     arg = phi * np.sqrt(1 + 1j * omega * t_G)
     tanh = np.ones_like(arg, dtype=complex)
     tanh[arg.real <= -100] = -1.0
@@ -368,7 +368,7 @@ def TLMQ(p, f):
     omega = 2 * np.pi * np.array(f)
     Rion, Qs, gamma = p[0], p[1], p[2]
     Zs = 1 / (Qs * (1j * omega) ** gamma)
-    
+
     arg = np.sqrt(Rion / Zs)
     tanh = np.ones_like(arg, dtype=complex)
     tanh[arg.real <= -100] = -1.0

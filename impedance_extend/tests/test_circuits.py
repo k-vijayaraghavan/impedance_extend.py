@@ -7,7 +7,6 @@ import pytest
 
 from impedance_extend.models.circuits import BaseCircuit, \
                                                     CustomCircuit, Randles
-from impedance_extend.models.circuits.fitting import rmse
 from impedance_extend.tests.test_fitting import get_data
 
 # get example data
@@ -220,4 +219,3 @@ def test_CustomCircuitwAlgorithm():
         custom_circuit.fit(frequencies, Z, bounds=bounds,
                            optimizations=optimizations.copy(), scale=scale)
         assert custom_circuit._is_fit()
-
