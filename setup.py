@@ -20,9 +20,9 @@ setuptools.setup(
     install_requires=['altair>=3.0', 'matplotlib>=3.5',
                       'numpy>=1.22.4', 'scipy>=1.0',
                       'pandas', 'pygad>=3.6.0', 'pyswarms>=1.3'],
-    classifiers=(
+    classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
-    ),
+    ],
 )
