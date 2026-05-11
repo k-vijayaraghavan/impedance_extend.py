@@ -7,7 +7,7 @@
 impedance_extend.py
 ------------
 
-`impedance_extend.py` is a Python package for making electrochemical impedance spectroscopy (EIS) analysis reproducible and easy-to-use. It extends [impedance.py](https://github.com/ECSHackWeek/impedance.py) by adding scipy_minimize, GA (using pygad), and PSO (using pyswarms) as additional optimization methods. `impedance_extend.py` additionally supports sequential optimization (such as running GA/PSO followed by scipy_minimize), and adding soft-constraints (such as ensure R1 < R2 or R1*C1 < 1 etc.). 
+`impedance_extend.py` is a Python package for making electrochemical impedance spectroscopy (EIS) analysis reproducible and easy-to-use. It extends [impedance.py](https://github.com/ECSHackWeek/impedance.py) by adding least_squares, GA (using pygad), and PSO (using pyswarms) as additional optimization methods. `impedance_extend.py` additionally supports sequential optimization (such as running GA/PSO followed by least_squares), and adding soft-constraints (such as ensure R1 < R2 or R1*C1 < 1 etc.). 
 
 Aiming to create a consistent, [scikit-learn-like API](https://arxiv.org/abs/1309.0238) for impedance analysis, impedance.py contains modules for data preprocessing, validation, model fitting, and visualization.
 

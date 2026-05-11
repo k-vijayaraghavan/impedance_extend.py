@@ -185,9 +185,17 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         Else
             If optimizations is not passed, curve_fit is used.
             If dict(s), it must algorithm + algorithm options
-                "algorithm" is mandatory. eg : {"algorithm" :
-                'scipy_minimize', 'method' : ...} or {"algorithm" :
-                'pygad', 'gene_space' : ...}
+            "algorithm" is mandatory.
+            Acceptable algorithm are 'curve_fit', 'basinhopping',
+            'least_squares', 'pygad', 'pyswarms' or a callable func*
+                eg : {"algorithm" : 'pygad', 'gene_space' : ...} or
+                {"algorithm" : 'pyswarms', 'options' : ...}
+                or {"algorithm" : func, 'cost_asvector' : True, ...}
+                Callable func supports 'vector_residuals':
+                    setting vector_residuals to True passes a vector of
+                    residuals to the cost funtion that is useful for
+                    scipy.optimize::least_squares
+
             List could be a list of dics (in the above format). This is used
             for sequential optimizations, particularly useful for GA.
 
@@ -224,7 +232,6 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
     # set upper and lower bounds on a per-element basis
     if bounds is None:
         bounds = set_default_bounds(circuit, constants=constants)
-    wrapedCircuit = wrapCircuit(circuit, constants)
 
     if global_opt:
         warn('global_opt has been deprecated. Use optimizations='
@@ -244,41 +251,45 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
     if not isinstance(opt, dict):
         opt = {"algorithm": opt}
 
-    target_Z = np.hstack([Z.real, Z.imag])
-
-    soft_constraint = kwargs.pop('soft_constraint', lambda p: 0)
-
     algo = opt["algorithm"]
-    if algo in ('scipy_minimize', 'pygad', 'pyswarms') or \
-            callable(opt["algorithm"]):
-        sigma = kwargs.pop('sigma', 1)
-        # weighting scheme for fitting
+    if algo in ('pygad', 'pyswarms', 'least_squares') or callable(algo):
+        n_soft_constraint = 1
+        soft_constraint = kwargs.pop('soft_constraint', lambda p: 0)
+
         if weight_by_modulus:
             abs_Z = np.abs(Z)
-            kwargs['sigma'] = np.hstack([abs_Z, abs_Z])
-        needscale = True
-        if callable(algo):
-            sig = inspect.signature(algo)
-            if 'scale' not in sig.parameters:
-                needscale = False
-        if needscale and scale is None:
-            scale = 10 ** np.round(np.log10(np.abs(initial_guess) +
-                                            np.finfo(float).eps))
-            warnings.warn(f"'scale' is recommeded for {str(algo)}. "
-                          "Using scale from initial_guess.")
+            kwargs['sigma'] = np.hstack([abs_Z, abs_Z, [1]*n_soft_constraint])
+            if 'sigma' in kwargs:
+                warn("weight_by_modulus==True over-rode sigma values")
+        else:
+            sigma = kwargs.pop('sigma', 1)
+        if isinstance(sigma, (list, np.ndarray)):
+            sigma = np.hstack([sigma, [1]*n_soft_constraint])
 
+        vector_residuals = opt.pop('vector_residuals', False) \
+            if callable(algo) else algo == 'least_squares'
+
+        if scale is None:
+            if not callable(algo):
+                scale = 10 ** np.round(np.log10(np.abs(initial_guess) +
+                                                np.finfo(float).eps))
+                warnings.warn(f"'scale' is recommeded for {str(algo)}. "
+                              "Using scale from initial_guess.")
+            else:
+                scale = 1
         scaled_low, scaled_high = scale_bounds(bounds, len(initial_guess),
                                                scale)
+        scaled_initial = np.array(initial_guess) / scale
 
         def obj_fn(p_scaled):
             p_unscaled = p_scaled * scale
             try:
                 pred_Z = wrapedCircuit(f, *p_unscaled)
-                error = np.sum(((pred_Z - target_Z) / sigma)**2) + \
-                    soft_constraint(p_unscaled)
+                pred_Z[-1] = soft_constraint(p_unscaled) * len(f)
+                error = (pred_Z - target_Z) / sigma
             except Exception:
                 return np.inf
-            return error
+            return error if vector_residuals else 0.5 * np.dot(error, error)
         pbar = None
         show_progress = opt.pop('show_progress',
                                 kwargs.get('show_progress', True))
@@ -291,10 +302,17 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
                 maxiter = kwargs.get('options', {}).get('maxiter', None)
             try:
                 from tqdm.auto import tqdm
+                method = f" ({opt.get('method', 'default')} method)"
                 pbar = tqdm(total=maxiter, desc="Circuit fit using " +
-                            str(opt["algorithm"]))
+                            (algo.__name__ if callable(algo)
+                             else str(opt["algorithm"])) + method)
             except ImportError:
                 warn('tqdm not found, progress cannot be plotted !!!')
+    else:
+        n_soft_constraint = 0
+
+    wrapedCircuit = wrapCircuit(circuit, constants, n_soft_constraint)
+    target_Z = np.hstack([Z.real, Z.imag, [0]*n_soft_constraint])
 
     if opt["algorithm"] == 'curve_fit':
         if 'maxfev' not in kwargs:
@@ -371,11 +389,10 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
             warnings.warn('Failed to compute perror')
             perror = None
 
-    elif opt["algorithm"] == 'scipy_minimize':
-        method = opt.pop('method', 'L-BFGS-B')
-        print(f"Running {opt['algorithm']} with {method}...")
+    elif opt["algorithm"] == 'least_squares':
+        method = opt.pop('method', 'trf')
 
-        from scipy.optimize import minimize
+        from scipy.optimize import least_squares
         user_callback = kwargs.pop('callback', None)
 
         def combined_callback(xk, *args, **kwds):
@@ -384,9 +401,10 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
             if user_callback is not None:
                 user_callback(xk, *args, **kwds)
 
-        min_bounds_scaled = list(zip(scaled_low, scaled_high))
-        res = minimize(obj_fn, initial_guess, bounds=min_bounds_scaled,
-                       callback=combined_callback, **kwargs)
+        min_bounds_scaled = (scaled_low, scaled_high)
+        res = least_squares(obj_fn, scaled_initial, method=method,
+                            bounds=min_bounds_scaled,
+                            callback=combined_callback, **kwargs)
         if pbar is not None:
             pbar.close()
         popt = res.x * scale
@@ -400,7 +418,6 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         perror = np.sqrt(np.diag(pcov))
 
     elif opt["algorithm"] == 'pygad':
-        print(f"Running {opt['algorithm']}...")
         import pygad
 
         def fitness_func(ga_instance, solution, solution_idx):
@@ -429,7 +446,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
                                  "population.")
 
             initial_population = np.empty((sol_per_pop, num_genes))
-            initial_population[0] = np.array(initial_guess) / scale
+            initial_population[0] = scaled_initial
 
             for i in range(1, sol_per_pop):
                 initial_population[i] = np.random.uniform(scaled_low,
@@ -474,7 +491,6 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         perror = np.sqrt(np.diag(pcov))
 
     elif opt["algorithm"] == 'pyswarms':
-        print(f"Running {opt['algorithm']}...")
         import pyswarms as ps
 
         def fitness_func(x):
@@ -502,7 +518,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         initial_population = opt.pop('initial_population', None)
         if initial_population is None:
             initial_population = np.empty((n_particles, num_dimensions))
-            initial_population[0] = np.array(initial_guess) / scale
+            initial_population[0] = scaled_initial
 
             for i in range(1, n_particles):
                 initial_population[i] = np.random.uniform(scaled_low,
@@ -545,19 +561,15 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         call_kwargs = {}
         # Map parameters dynamically based on the callable's signature
         if 'initial_guess' in valid_params:
-            call_kwargs['initial_guess'] = initial_guess
+            call_kwargs['initial_guess'] = scaled_initial
         elif 'x0' in valid_params:  # Standard scipy optimize param
-            call_kwargs['x0'] = initial_guess
+            call_kwargs['x0'] = scaled_initial
         else:
             warn('Initial guess was ignored')
         if 'bounds' in valid_params:
             call_kwargs['bounds'] = bounds
         else:
             warn('bounds was ignored')
-        if 'scale' in valid_params:
-            call_kwargs['scale'] = scale
-        elif not is_scalarval(scale, 1):  # scale != 1 :
-            warn('scale was ignored')
         if 'fun' in valid_params:
             call_kwargs['fun'] = obj_fn
         else:
@@ -566,12 +578,17 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
 
         accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD
                              for p in valid_params.values())
+        ignored = []
         for k, v in opt.items():
             if k in valid_params or accepts_kwargs:
                 call_kwargs[k] = v
+            else:
+                ignored.append(k)
+        if ignored != []:
+            warn('Ignored ' + ','.join(ignored))
 
         res = algo(**call_kwargs)
-        popt = res.x if hasattr(res, 'x') else res
+        popt = (res.x if hasattr(res, 'x') else res) * scale
         pcov = np.zeros((len(popt), len(popt)))
         perror = np.sqrt(np.diag(pcov))
     else:
@@ -586,7 +603,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         return popt, perror
 
 
-def wrapCircuit(circuit, constants):
+def wrapCircuit(circuit, constants, addn=0):
     """ wraps function so we can pass the circuit string """
     buildCircuit_text = buildCircuit(circuit, constants=constants,
                                      eval_string='', index=0)[0]
@@ -614,7 +631,7 @@ def wrapCircuit(circuit, constants):
         y_real = np.real(x)
         y_imag = np.imag(x)
 
-        return np.hstack([y_real, y_imag])
+        return np.hstack([y_real, y_imag, [0]*addn])
     return wrappedCircuit
 
 

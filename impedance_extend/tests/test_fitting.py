@@ -168,7 +168,7 @@ rmse_limit = 1e-1
 
 def test_circuit_fit_scipy_minimize():
     data = get_data()
-    optimizations = {'algorithm': 'scipy_minimize'}
+    optimizations = {'algorithm': 'least_squares'}
     for circuit, initial_guess, scale, results, bounds, frequencies, \
             Z_data in data:
         constants = {}
@@ -254,7 +254,7 @@ def test_circuit_fit_callable():
 def test_circuit_fit_seq():
     data = get_data()
     optimizations = [{'algorithm': 'pygad'},
-                     {'algorithm': 'scipy_minimize'}]
+                     {'algorithm': 'least_squares'}]
     for circuit, initial_guess, scale, results, bounds, frequencies, \
             Z_data in data:
         constants = {}
