@@ -402,9 +402,12 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
                 user_callback(xk, *args, **kwds)
 
         min_bounds_scaled = (scaled_low, scaled_high)
+        if 'callback' in inspect.signature(least_squares).parameters.keys():
+            kwargs['callback'] = combined_callback
+        else:
+            warn('This version of least_squares does not support "callback"')
         res = least_squares(obj_fn, scaled_initial, method=method,
-                            bounds=min_bounds_scaled,
-                            callback=combined_callback, **kwargs)
+                            bounds=min_bounds_scaled, **kwargs)
         if pbar is not None:
             pbar.close()
         popt = res.x * scale
