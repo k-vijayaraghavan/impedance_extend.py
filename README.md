@@ -20,7 +20,7 @@ If you have a feature request or find a bug, please [file an issue](https://gith
 The easiest way to install impedance_extend.py is from [PyPI](https://pypi.org/project/impedance_extend/) using pip.
 
 ```bash
-pip install impedance
+pip install impedance_extend
 ```
 
 See [Getting started with impedance.py](https://impedancepy.readthedocs.io/en/latest/getting-started.html) for instructions on getting started from scratch.

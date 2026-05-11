@@ -273,6 +273,33 @@ def test_circuit_fit_seq():
             f'Failed {circuit}: {results} != {calc}; RMSE={err}'
 
 
+def test_circuit_fit_softconstraint():
+    from impedance_extend import preprocessing
+    frequencies, Z = preprocessing.readCSV('./data/exampleData.csv')
+    frequencies, Z = preprocessing.ignoreBelowX(frequencies, Z)
+    bounds=[(0,0.1),(0,100),(0,0.01),(0,100),(0,1)]
+    circuit='R_0-p(R_1,C_1)-p(R_2,C_2)-Wo_1'
+    constants={'R_0': 0.02, 'Wo_1_1': 200}
+    #VV             R_1, C_1, R_2, C_2, Wo_1_0
+    initial_guess=[.005, .1, .005, .1, .001]
+    # #VV             P_0, R_1, C_1, R_2, C_2, Wo_1_0, Wo_1_1
+    # initial_guess=[0.02, .005, .1, .005, .1, .001, 200] #--> TODO: Will scaling cause problem
+    #Ensure R_1 C_1 < R_2 C_2 -- penalize R_1 C_1 - R_2 C_2
+    sig = lambda x : 1 / (1 + np.exp(-10*x))
+    #soft_constraint = lambda p: 10*sig(p[0]*p[1]-p[2]*p[3])
+    def soft_constraint(p):
+        ret = 10*sig(p[0]*p[1]-p[2]*p[3])
+        return ret
+    optimizations = [{'algorithm': 'pygad'},
+                     {'algorithm': 'least_squares'}]
+    calc = circuit_fit(frequencies, Z, circuit, initial_guess, 
+                       constants=constants, optimizations=optimizations.copy(),
+                       bounds=bounds, soft_constraint=soft_constraint)[0]
+    # results=[2.24e-03, 4.00e+01, 8.45e-03, 1.64e+00, 5.85e-02]
+    results=[8.45e-03, 1.64e+00, 2.24e-03, 4.00e+01, 5.85e-02]
+    assert calc[0]*calc[1] <= calc[2]*calc[3]
+
+
 def subsitute_values(buildCircuit_text, frequencies, parameters):
     parameters = [float(p) for p in parameters]
     frequencies = [float(p) for p in frequencies]
