@@ -14,7 +14,7 @@ setuptools.setup(
                 "thereof)",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://impedancepy.readthedocs.io/en/latest/",
+    url="https://impedance-extend.readthedocs.io/en/latest/",
     packages=setuptools.find_packages(),
     python_requires="~=3.10",
     install_requires=['altair>=3.0', 'matplotlib>=3.5',
