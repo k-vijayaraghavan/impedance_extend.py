@@ -2,7 +2,7 @@
 
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/impedance_extend?style=flat-square)  [![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors)
 
-[![Build Status](https://github.com/k-vijayaraghavan/impedance_extend.py/actions/workflows/ci.yml/badge.svg)](https://github.com/k-vijayaraghavan/impedance_extend.py/actions)  [![Documentation Status](https://readthedocs.org/projects/impedancepy/badge/?version=latest&kill_cache=1)](https://impedancepy.readthedocs.io/en/latest/?badge=latest) [![Coverage Status](https://coveralls.io/repos/github/ECSHackWeek/impedance.py/badge.svg?branch=master&kill_cache=1)](https://coveralls.io/github/ECSHackWeek/impedance.py?branch=master)
+[![Build Status](https://github.com/k-vijayaraghavan/impedance_extend.py/actions/workflows/ci.yml/badge.svg)](https://github.com/k-vijayaraghavan/impedance_extend.py/actions)  [![Documentation Status](https://readthedocs.org/projects/impedance-extendpy/badge/?version=latest&kill_cache=1)](https://impedance-extendpy.readthedocs.io/en/latest/?badge=latest) [![Coverage Status](https://coveralls.io/repos/github/ECSHackWeek/impedance.py/badge.svg?branch=master&kill_cache=1)](https://coveralls.io/github/ECSHackWeek/impedance.py?branch=master)
 
 impedance_extend.py
 ------------
@@ -44,7 +44,7 @@ Several example notebooks are provided in the `docs/source/examples/` directory.
 
 Several examples can be found in the `docs/source/examples/` directory (the [Fitting impedance spectra notebook](https://impedancepy.readthedocs.io/en/latest/examples/fitting_example.html) is a great place to start) and the documentation can be found at [impedancepy.readthedocs.io](https://impedancepy.readthedocs.io/en/latest/).
 
-## Citing impedance.py
+## Citing the original impedance.py
 
 [![DOI](https://joss.theoj.org/papers/10.21105/joss.02349/status.svg)](https://doi.org/10.21105/joss.02349)
 

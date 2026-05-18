@@ -4,37 +4,41 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-impedance_extendpy
+impedance-extend
 =============
 
-:code:`impedance_extendpy` is a Python package for making 
+:code:`impedance-extend` is a Python package for making 
 electrochemical impedance spectroscopy (EIS) analysis
 reproducible and easy-to-use.
 
 Aiming to create a consistent,
 `scikit-learn-like API <https://arxiv.org/abs/1309.0238>`_
-for impedance analysis, :code:`impedance_extendpy` contains
+for impedance analysis, :code:`impedance-extend` contains
 modules for data preprocessing, validation, model fitting,
 and visualization.
 
 
-If you have a feature request or find a bug, please 
-`file an issue <https://github.com/ECSHackWeek/impedance_extendpy/issues>`_
+If you have a feature request or find a bug with the original package, please 
+`file an issue <https://github.com/ECSHackWeek/impedance.py/issues>`_
+
+If you have a feature request or find a bug with the new package, please 
+`file an issue <https://github.com/k-vijayaraghavan/impedance_extend.py/issues>`_
+
 or, better yet, make the code improvements and 
 `submit a pull request <https://help.github.com/articles/creating-a-pull-request-from-a-fork/>`_!
 The goal is to build an open-source tool that the
-entire impedance community can improve and use!
+entire impedance-extend community can improve and use!
 
 Installation
 ------------
 
 The easiest way to install :code:`impedance_extendpy` is
-from `PyPI <https://pypi.org/project/impedance/>`_ 
+from `PyPI <https://pypi.org/project/impedance-extend/>`_ 
 using pip:
 
 .. code-block:: bash
 
-   pip install impedance
+   pip install impedance-extend
 
 See :doc:`./getting-started` for instructions
 on getting started from scratch.

@@ -1,14 +1,17 @@
 =========================================
-Getting started with :code:`impedance_extendpy`
+Getting started with :code:`impedance-extend`
 =========================================
 
-:code:`impedance_extendpy` is a Python package for analyzing electrochemical impedance
+:code:`impedance-extend` is a Python package for analyzing electrochemical impedance
 spectroscopy (EIS) data. The following steps will show you how to get started
-analyzing your own data using :code:`impedance_extendpy` in a Jupyter notebook.
+analyzing your own data using :code:`impedance-extend` in a Jupyter notebook.
 
 .. hint::
-  If you get stuck or believe you have found a bug, please feel free to open an
+  If you get stuck or believe you have found a bug with the original package, please feel free to open an
   `issue on GitHub <https://github.com/ECSHackWeek/impedance_extendpy/issues>`_.
+
+  If you get stuck or believe you have found a bug with this package, please feel free to open an
+  `issue on GitHub <https://github.com/k-vijayaraghavan/impedance_extend.py/issues>`_.
 
 Step 1: Installation
 ====================
@@ -59,18 +62,18 @@ install anything into it by using:
    conda activate impedance-analysis
 
 We've now activated our conda environment and are ready to install
-:code:`impedance_extendpy`!
+:code:`impedance-extend`!
 
 Installing packages
 -------------------
 
-The easiest way to install :code:`impedance_extendpy` and it's dependencies
+The easiest way to install :code:`impedance-extend` and it's dependencies
 (:code:`scipy`, :code:`numpy`, and :code:`matplotlib`) is from
-`PyPI <https://pypi.org/project/impedance/>`_ using pip:
+`PyPI <https://pypi.org/project/impedance-extend/>`_ using pip:
 
 .. code-block:: bash
 
-   pip install impedance
+   pip install impedance-extend
 
 For this example we will also need Jupyter Lab which we can install with:
 
@@ -91,9 +94,9 @@ Open Jupyter Lab
 
 .. code-block:: bash
 
-   mkdir ~/Documents/impedance-example
+   mkdir ~/Documents/impedance-extend-example
 
-   cd ~/Documents/impedance-example
+   cd ~/Documents/impedance-extend-example
 
 Next, we will launch an instance of Jupyter Lab:
 
@@ -131,7 +134,7 @@ Step 3: Define your impedance model
 ===================================
 
 Next we want to define our impedance model. In order to enable a wide variety
-of researchers to use the tool, :code:`impedance_extendpy` allows you to define a
+of researchers to use the tool, :code:`impedance-extend` allows you to define a
 custom circuit with any combination of `circuit elements <circuit-elements.html>`_.
 
 The circuit is defined as a string (i.e. using :code:`''` in Python), where elements in
@@ -214,4 +217,4 @@ To easily visualize the fit, the :code:`plot_nyquist()` function can be handy.
 .. image:: _static/example_fit_fig.png
 
 .. important::
-  🎉 Congratulations! You're now up and running with impedance_extendpy 🎉
+  🎉 Congratulations! You're now up and running with impedance-extend 🎉
