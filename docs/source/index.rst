@@ -53,6 +53,9 @@ impedance_extendpy requires:
 -   NumPy (>=1.14)
 -   Matplotlib (>=3.0)
 -   Altair (>=3.0)
+-   Pandas
+-   Pygad (>=3.6.0)
+-   Pyswarms (>=1.3)
 
 Several example notebooks are provided in the examples/ directory.
 Opening these will require Jupyter notebook or Jupyter lab.
@@ -71,6 +74,7 @@ The documentation can be found at
    :caption: Contents
 
    getting-started
+   motivation
    examples
    preprocessing
    validation

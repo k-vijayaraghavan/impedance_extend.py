@@ -1,4 +1,4 @@
-[![DOI]]  ![GitHub release](https://img.shields.io/github/release/k-vijayaraghavan/impedance_extend.py)
+![GitHub release](https://img.shields.io/github/release/k-vijayaraghavan/impedance_extend.py)
 
 ![PyPI - Downloads](https://img.shields.io/pypi/dm/impedance_extend?style=flat-square)  [![All Contributors](https://img.shields.io/badge/all_contributors-1-orange.svg?style=flat-square)](#contributors)
 
@@ -14,6 +14,31 @@ Aiming to create a consistent, [scikit-learn-like API](https://arxiv.org/abs/130
 For a little more in-depth discussion of the package background and capabilities, check out our [Journal of Open Source Software paper](https://joss.theoj.org/papers/10.21105/joss.02349).
 
 If you have a feature request or find a bug, please [file an issue](https://github.com/k-vijayaraghavan/impedance_extend.py/issues) or, better yet, make the code improvements and [submit a pull request](https://help.github.com/articles/creating-a-pull-request-from-a-fork/)! The goal is to build an open-source tool that the entire impedance community can improve and use!
+
+### Motivation for extension
+
+The parameters of the equivalent circuit, $p$, need to be calculated such that the impedance of the circuit, $Z(f,p)$ is "equal" to the target impedance, $Z_{tgt}(f)$. Since the impedance cannot always be made exactly equal, it is instead more practical to minimize the difference between the impedances instead. To this end 
+$$
+p=\underset{p}{argmin} \; J(p)
+$$
+where the cost function, 
+$$J(p)=\sum_{f} [Z(f,p)-Z_{tgt}(f)]^2$$
+
+The original `impedance.py` uses `curve_fit` (which uses `least_squares` under the hood), and `basinhopping` when `global_opt=True`. `least_squares` is well suited for functions with a single minimum. If there are multiple minima, `least_squares` may get stuck at a local minimum; as such it is sensitive to initial conditions. `basinhopping` primarily uses local gradient methods to find the (local) minimum. The algorithm then uses a "hop" 
+to perturb the parameter, and then checks if the cost function could have a logical global trend. 
+Hence, the `basinhopping` works well if cost-function has "funnel" of "bowl" topology with some "pits".
+
+We observed that `basinhopping` did not converge when data was noisy data. 
+Hence, `impedance_extend` adds Particle Swarm Optimization (PSO) and Genetic Algorithm (GA) based optimization. 
+
+PSO works when the cost-function land scape is "Rugged & Noisy" with non-differentiable mountain range with many small, disconnected "false valleys,".
+
+GA works well when the cost-function landscape has local minimum with "Strong Local Attraction.". Since GA spans the parameter space it is likely to reach the true minimum. 
+
+![optimization](docs/source/optimization.png)
+**Illustration of the different optimization algorithms (AI generated).**
+
+[Plevris et al.](https://joss.theoj.org/papers/10.21105/joss.02349) [10.21105/joss.02349](https://doi.org/10.21105/joss.02349) may provide better insights into the optimization problem (providing a head-to-head comparison between GA and PSO-based optimization and classical optimization for a wide rage of multi-parameter functions).
 
 ### Installation
 
@@ -35,8 +60,8 @@ impedance.py requires:
 -   Matplotlib (>=3.5)
 -   Altair (>=3.0)
 -   Pandas
--   pygad>=3.6.0
--   pyswarms>=1.3
+-   Pygad (>=3.6.0)
+-   Pyswarms (>=1.3)
 
 Several example notebooks are provided in the `docs/source/examples/` directory. Opening these will require Jupyter notebook or Jupyter lab.
 
