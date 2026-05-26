@@ -166,7 +166,7 @@ def get_data():
 rmse_limit = 1e-1
 
 
-def test_circuit_fit_scipy_minimize():
+def test_circuit_fit_least_squares():
     data = get_data()
     optimizations = {'algorithm': 'least_squares'}
     for circuit, initial_guess, scale, results, bounds, frequencies, \
