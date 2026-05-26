@@ -88,7 +88,7 @@ class BaseCircuit:
 
         Returns
         -------
-        self: returns an instance of self
+        self: returns an instance of self or self and optimzation object(s)
 
         """
         frequencies = np.array(frequencies, dtype=float)
