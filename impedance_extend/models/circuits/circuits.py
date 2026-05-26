@@ -98,19 +98,17 @@ class BaseCircuit:
             raise TypeError('length of frequencies and impedance do not match')
 
         if self.initial_guess != []:
-            ret = circuit_fit(frequencies, impedance,
-                                           self.circuit, self.initial_guess,
-                                           constants=self.constants,
-                                           bounds=bounds,
-                                           weight_by_modulus=weight_by_modulus,
-                                           **kwargs)
+            ret = circuit_fit(frequencies, impedance, self.circuit,
+                              self.initial_guess, constants=self.constants,
+                              bounds=bounds,
+                              weight_by_modulus=weight_by_modulus, **kwargs)
             self.parameters_ = ret[0]
             if ret[1] is not None:
                 self.conf_ = ret[1]
         else:
             raise ValueError('No initial guess supplied')
 
-        return self if len(ret) < 3 else (self,ret[2])
+        return self if len(ret) < 3 else (self, ret[2])
 
     def _is_fit(self):
         """ check if model has been fit (parameters_ is not None) """

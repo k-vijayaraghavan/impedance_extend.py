@@ -606,15 +606,15 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         raise ValueError(f"Unknown optimization algorithm: {opt['algorithm']}")
     if len(optimizations) > 0:
         ret = circuit_fit(frequencies, impedances, circuit,
-                           initial_guess=popt, constants=constants,
-                           bounds=bounds, weight_by_modulus=weight_by_modulus,
-                           global_opt=False, optimizations=optimizations,
-                           scale=scale, **kwargs_org)
+                          initial_guess=popt, constants=constants,
+                          bounds=bounds, weight_by_modulus=weight_by_modulus,
+                          global_opt=False, optimizations=optimizations,
+                          scale=scale, **kwargs_org)
         if ret_obj:
             if len(ret) < 3:
                 ret.append(res)
             else:
-                ret[2] = [res] + ret[2] if isinstance(ret[2],list) \
+                ret[2] = [res] + ret[2] if isinstance(ret[2], list) \
                     else [res, ret[2]]
         return ret
     else:
