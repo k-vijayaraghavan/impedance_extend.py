@@ -219,6 +219,10 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
     p_errors : list of floats
         one standard deviation error estimates for fit parameters
 
+   result_objects : For pygad, pyswarms and callable func) \
+                    object or list of objects
+        result objec or list of result objects
+
     Notes
     ---------
     Need to do a better job of handling errors in fitting.
@@ -305,10 +309,12 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
                 method = f" ({opt.get('method', 'default')} method)"
                 pbar = tqdm(total=maxiter, desc="Circuit fit using " +
                             (algo.__name__ if callable(algo)
-                             else str(opt["algorithm"])) + method)
+                             else str(opt["algorithm"])) + method, leave=False)
             except ImportError:
                 warn('tqdm not found, progress cannot be plotted !!!')
+        ret_obj = True
     else:
+        ret_obj = False
         n_soft_constraint = 0
 
     wrapedCircuit = wrapCircuit(circuit, constants, n_soft_constraint)
@@ -489,6 +495,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
             ga_instance.plot_fitness()
 
         solution, solution_fitness, solution_idx = ga_instance.best_solution()
+        res = ga_instance
         popt = solution * scale
         pcov = np.zeros((len(popt), len(popt)))
         perror = np.sqrt(np.diag(pcov))
@@ -541,6 +548,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         verbose = opt.pop('verbose', pbar is None)
         cost, pos = optimizer.optimize(fitness_func, iters=iters,
                                        verbose=verbose)
+        res = optimizer
 
         if pbar is not None:
             pbar.close()
@@ -597,13 +605,20 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
     else:
         raise ValueError(f"Unknown optimization algorithm: {opt['algorithm']}")
     if len(optimizations) > 0:
-        return circuit_fit(frequencies, impedances, circuit,
+        ret = circuit_fit(frequencies, impedances, circuit,
                            initial_guess=popt, constants=constants,
                            bounds=bounds, weight_by_modulus=weight_by_modulus,
                            global_opt=False, optimizations=optimizations,
                            scale=scale, **kwargs_org)
+        if ret_obj:
+            if len(ret) < 3:
+                ret.append(res)
+            else:
+                ret[2] = [res] + ret[2] if isinstance(ret[2],list) \
+                    else [res, ret[2]]
+        return ret
     else:
-        return popt, perror
+        return [popt, perror, res] if ret_obj else [popt, perror]
 
 
 def wrapCircuit(circuit, constants, addn=0):
