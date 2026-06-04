@@ -74,7 +74,8 @@ def set_default_bounds(circuit, constants={}):
         for i in range(check_and_eval(raw_element).num_params):
             if elem in constants or elem + f'_{i}' in constants:
                 continue
-            if raw_element in ['CPE', 'La'] and i == 1:
+            if (raw_element in ['CPE', 'La'] and i == 1) or \
+               (raw_element in ['TLMQ'] and i == 2):
                 upper_bounds.append(1)
             else:
                 upper_bounds.append(np.inf)
