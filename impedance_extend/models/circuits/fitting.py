@@ -233,10 +233,6 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
     f = np.array(frequencies, dtype=float)
     Z = np.array(impedances, dtype=complex)
 
-    # set upper and lower bounds on a per-element basis
-    if bounds is None:
-        bounds = set_default_bounds(circuit, constants=constants)
-
     if global_opt:
         warn('global_opt has been deprecated. Use optimizations='
              '{"algorithm": "basinhopping"} OR '
@@ -254,6 +250,12 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
 
     if not isinstance(opt, dict):
         opt = {"algorithm": opt}
+
+    # set upper and lower bounds on a per-element basis
+    bounds_ = bounds
+    bounds = opt.pop("bounds", bounds)
+    if bounds is None:
+        bounds = set_default_bounds(circuit, constants=constants)
 
     algo = opt["algorithm"]
     if algo in ('pygad', 'pyswarms', 'least_squares') or callable(algo):
@@ -607,7 +609,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
     if len(optimizations) > 0:
         ret = circuit_fit(frequencies, impedances, circuit,
                           initial_guess=popt, constants=constants,
-                          bounds=bounds, weight_by_modulus=weight_by_modulus,
+                          bounds=bounds_, weight_by_modulus=weight_by_modulus,
                           global_opt=False, optimizations=optimizations,
                           scale=scale, **kwargs_org)
         if ret_obj:
