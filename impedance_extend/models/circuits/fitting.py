@@ -4,7 +4,7 @@ import inspect
 from warnings import warn
 
 import numpy as np
-from scipy.linalg import inv
+from scipy.linalg import inv, svd
 from scipy.optimize import curve_fit, basinhopping
 
 from .elements import circuit_elements, get_element_from_name
@@ -131,6 +131,30 @@ def is_scalarval(var, val):
     if var != val:
         return False
     return True
+
+
+def calc_perror(res, df, scale=1, name=""):
+    if hasattr(res, 'jac'):
+        _, s, VT = svd(res.jac, full_matrices=False)
+        threshold = np.finfo(float).eps * max(res.jac.shape) * s[0]
+        s = s[s > threshold]
+        VT = VT[:s.size]
+        pcov = np.dot(VT.T / s**2, VT)
+        cost = 2 * res.cost
+        # df = len(target_Z) - len(popt)
+        if df > 0:
+            pcov = pcov * (cost / df)
+        pcov = pcov * np.outer(scale, scale)
+    elif hasattr(res, 'hess_inv'):
+        pcov = res.hess_inv
+        if hasattr(pcov, "todense"):
+            pcov = pcov.todense()
+        pcov = pcov * np.outer(scale, scale)
+    else:
+        warnings.warn('Failed to compute perror as this version of '
+                      'least_squares returns neither "hess_inv" nor "jac"')
+        return None
+    return np.sqrt(np.diag(pcov))
 
 
 def circuit_fit(frequencies, impedances, circuit, initial_guess,
@@ -420,14 +444,8 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         if pbar is not None:
             pbar.close()
         popt = res.x * scale
-        if hasattr(res, 'hess_inv'):
-            pcov = res.hess_inv
-            if hasattr(pcov, "todense"):
-                pcov = pcov.todense()
-            pcov = pcov * np.outer(scale, scale)
-        else:
-            pcov = np.zeros((len(popt), len(popt)))
-        perror = np.sqrt(np.diag(pcov))
+        perror = calc_perror(res, len(target_Z) - len(popt), scale,
+                             name=opt["algorithm"])
 
     elif opt["algorithm"] == 'pygad':
         import pygad
@@ -500,8 +518,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         solution, solution_fitness, solution_idx = ga_instance.best_solution()
         res = ga_instance
         popt = solution * scale
-        pcov = np.zeros((len(popt), len(popt)))
-        perror = np.sqrt(np.diag(pcov))
+        perror = None
 
     elif opt["algorithm"] == 'pyswarms':
         import pyswarms as ps
@@ -564,8 +581,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
             plt.show()
 
         popt = pos * scale
-        pcov = np.zeros((len(popt), len(popt)))
-        perror = np.sqrt(np.diag(pcov))
+        perror = None
 
     elif callable(opt["algorithm"]):
         algo = opt.pop('algorithm')
@@ -603,8 +619,9 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
 
         res = algo(**call_kwargs)
         popt = (res.x if hasattr(res, 'x') else res) * scale
-        pcov = np.zeros((len(popt), len(popt)))
-        perror = np.sqrt(np.diag(pcov))
+        perror = calc_perror(res, len(target_Z) - len(popt), scale,
+                             name=algo.__name__ if callable(algo)
+                             else str(opt["algorithm"]))
     else:
         raise ValueError(f"Unknown optimization algorithm: {opt['algorithm']}")
     if len(optimizations) > 0:

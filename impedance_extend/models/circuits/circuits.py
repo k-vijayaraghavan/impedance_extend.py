@@ -8,6 +8,7 @@ import json
 import matplotlib.pyplot as plt
 import numpy as np
 import warnings
+from scipy import stats
 
 
 class BaseCircuit:
@@ -45,6 +46,8 @@ class BaseCircuit:
         # initialize fit parameters and confidence intervals
         self.parameters_ = None
         self.conf_ = None
+        self.tscores_ = None
+        self.pvalues_ = None
 
     def __eq__(self, other):
         if self.__class__ == other.__class__:
@@ -107,6 +110,11 @@ class BaseCircuit:
                 self.conf_ = ret[1]
         else:
             raise ValueError('No initial guess supplied')
+
+        if (self.conf_ is not None) and self.conf_.all():
+            self.tscores_ = self.parameters_ / self.conf_
+            df = 2 * len(frequencies) - len(self.parameters_)
+            self.pvalues_ = 2 * (1 - stats.t.cdf(np.abs(self.tscores_), df=df))
 
         return self if len(ret) < 3 else (self, ret[2])
 
@@ -309,6 +317,8 @@ class BaseCircuit:
         if self._is_fit():
             parameters_ = list(self.parameters_)
             model_conf_ = list(self.conf_)
+            model_tscores_ = list(self.tscores_)
+            model_pvalues_ = list(self.pvalues_)
 
             data_dict = {"Name": model_name,
                          "Circuit String": model_string,
@@ -317,6 +327,8 @@ class BaseCircuit:
                          "Fit": True,
                          "Parameters": parameters_,
                          "Confidence": model_conf_,
+                         "Tscores": model_tscores_,
+                         "Pvalue": model_pvalues_,
                          }
         else:
             data_dict = {"Name": model_name,
@@ -364,6 +376,8 @@ class BaseCircuit:
             else:
                 self.parameters_ = np.array(json_data["Parameters"])
                 self.conf_ = np.array(json_data["Confidence"])
+                self.tscores_ = np.array(json_data["Tscores"])
+                self.pvalues_ = np.array(json_data["Pvalue"])
 
 
 class Randles(BaseCircuit):
