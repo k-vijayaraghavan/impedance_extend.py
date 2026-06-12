@@ -112,9 +112,24 @@ class BaseCircuit:
             raise ValueError('No initial guess supplied')
 
         if (self.conf_ is not None) and self.conf_.all():
-            self.tscores_ = self.parameters_ / self.conf_
+            # For CPEx_1|Lax_1|TLMQ_2, check significance of value < 1
+            # For other parameter check significance value > 0
+
+            def diff_ref_value(name, val):
+                name_split = name.split('_')
+                return 1.-val \
+                    if (len(name_split) == 1) and \
+                    ((name_split[0] in ['CPE', 'La'] and name_split[1] == "1")
+                     or (name_split[0] in ['TLMQ'] and name_split[1] == "2")) \
+                    else val
+
+            enames, _ = self.get_param_names()
+            self.tscores_ = np.array([
+                diff_ref_value(ename, self.parameters_[i])
+                for i, ename in enumerate(enames)
+                ]) / self.conf_
             df = 2 * len(frequencies) - len(self.parameters_)
-            self.pvalues_ = 2 * (1 - stats.t.cdf(np.abs(self.tscores_), df=df))
+            self.pvalues_ = 1 - stats.t.cdf(np.abs(self.tscores_), df=df)
 
         return self if len(ret) < 3 else (self, ret[2])
 
