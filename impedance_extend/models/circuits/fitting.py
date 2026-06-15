@@ -1,6 +1,7 @@
 import warnings
 import os
 import inspect
+import random
 from warnings import warn
 
 import numpy as np
@@ -85,10 +86,11 @@ def set_default_bounds(circuit, constants={}):
     return bounds
 
 
-def scale_bounds(bounds, n_guess, scale):
+def scale_bounds(bounds, guess, scale, ubound_finite=False):
     # We should either accept [(0, 0.1), (0, 100), (0, 0.01), (0, 10), (0, 1)]
     # or [(0, 0, ...), [0.1, 100, ...]] or [0, [0.1, 100, ...]];
     # This should also work when n_guess=2
+    n_guess = len(guess)
     is_format_1 = False
 
     if len(bounds) == n_guess and len(bounds) != 2:
@@ -114,6 +116,16 @@ def scale_bounds(bounds, n_guess, scale):
             b0 = np.repeat(b0[0], n_guess)
         if len(b1) == 1:
             b1 = np.repeat(b1[0], n_guess)
+        if ubound_finite:
+            flag = False
+            ubf = 10
+            b1_ = ubf*pow_of_10(guess, 1)
+            for ib, b in enumerate(b1):
+                if np.isposinf(b):
+                    flag = True
+                    b1[ib] = b1_[ib]
+            if flag:
+                warn("Forcing finite upper bound")
 
     if scale is None:
         scale = np.ones(n_guess)
@@ -155,6 +167,22 @@ def calc_perror(res, df, scale=1, name=""):
                       'least_squares returns neither "hess_inv" nor "jac"')
         return None
     return np.sqrt(np.diag(pcov))
+
+
+def pow_of_10(num, dirn=0):
+    # ret = 10 ** np.round(np.log10(np.abs(num) +
+    #                                 np.finfo(float).eps))
+    # Set dirn = 1 for getting next power of 10, 0 for closest
+    if dirn == 1:
+        ret = 10 ** np.ceil(np.log10(np.abs(num) +
+                            np.finfo(float).eps))
+    else:
+        ret = 10 ** np.floor(np.log10(np.abs(num) +
+                             np.finfo(float).eps))
+        if dirn == 0:
+            idx = num >= 5*ret
+            ret[idx] *= 10
+    return ret
 
 
 def circuit_fit(frequencies, impedances, circuit, initial_guess,
@@ -254,7 +282,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
     Currently, an error of -1 is returned.
 
     """
-    kwargs_org = kwargs
+    kwargs_org = kwargs.copy()
     f = np.array(frequencies, dtype=float)
     Z = np.array(impedances, dtype=complex)
 
@@ -275,14 +303,26 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
 
     if not isinstance(opt, dict):
         opt = {"algorithm": opt}
+    kwargs.update(opt)
+    algo = kwargs.pop("algorithm")
 
     # set upper and lower bounds on a per-element basis
     bounds_ = bounds
-    bounds = opt.pop("bounds", bounds)
+    bounds = kwargs.pop("bounds", bounds)
     if bounds is None:
         bounds = set_default_bounds(circuit, constants=constants)
 
-    algo = opt["algorithm"]
+    seed_val = kwargs.pop('seed', None)
+    random_seed_val = kwargs.pop('random_seed', None)
+    seed = seed_val if seed_val is not None else random_seed_val
+    if seed is not None:
+        np.random.seed(seed)
+        random.seed(seed)
+        if algo == 'pygad':
+            kwargs['random_seed'] = seed
+        elif algo == 'basinhopping':
+            kwargs['seed'] = seed
+
     if algo in ('pygad', 'pyswarms', 'least_squares') or callable(algo):
         n_soft_constraint = 1
         soft_constraint = kwargs.pop('soft_constraint', lambda p: 0)
@@ -297,19 +337,19 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         if isinstance(sigma, (list, np.ndarray)):
             sigma = np.hstack([sigma, [1]*n_soft_constraint])
 
-        vector_residuals = opt.pop('vector_residuals', False) \
+        vector_residuals = kwargs.pop('vector_residuals', False) \
             if callable(algo) else algo == 'least_squares'
 
         if scale is None:
             if not callable(algo):
-                scale = 10 ** np.round(np.log10(np.abs(initial_guess) +
-                                                np.finfo(float).eps))
+                scale = pow_of_10(initial_guess, 0)
                 warnings.warn(f"'scale' is recommeded for {str(algo)}. "
                               "Using scale from initial_guess.")
             else:
                 scale = 1
-        scaled_low, scaled_high = scale_bounds(bounds, len(initial_guess),
-                                               scale)
+        scaled_low, scaled_high = scale_bounds(bounds, initial_guess,
+                                               scale, ubound_finite=algo
+                                               in ('pygad', 'pyswarms'))
         scaled_initial = np.array(initial_guess) / scale
 
         def obj_fn(p_scaled):
@@ -322,21 +362,21 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
                 return np.inf
             return error if vector_residuals else 0.5 * np.dot(error, error)
         pbar = None
-        show_progress = opt.pop('show_progress',
-                                kwargs.get('show_progress', True))
+        show_progress = kwargs.pop('show_progress',
+                                   kwargs.get('show_progress', True))
         if show_progress:
-            if opt["algorithm"] == 'pygad':
-                maxiter = opt.get('num_generations', 1000)
-            elif opt["algorithm"] == 'pyswarms':
-                maxiter = opt.get('iters', 1000)
+            if algo == 'pygad':
+                maxiter = kwargs.get('num_generations', 1000)
+            elif algo == 'pyswarms':
+                maxiter = kwargs.get('iters', 1000)
             else:
                 maxiter = kwargs.get('options', {}).get('maxiter', None)
             try:
                 from tqdm.auto import tqdm
-                method = f" ({opt.get('method', 'default')} method)"
+                method = f" ({kwargs.get('method', 'default')} method)"
                 pbar = tqdm(total=maxiter, desc="Circuit fit using " +
                             (algo.__name__ if callable(algo)
-                             else str(opt["algorithm"])) + method, leave=False)
+                             else str(algo)) + method, leave=False)
             except ImportError:
                 warn('tqdm not found, progress cannot be plotted !!!')
         ret_obj = True
@@ -347,7 +387,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
     wrapedCircuit = wrapCircuit(circuit, constants, n_soft_constraint)
     target_Z = np.hstack([Z.real, Z.imag, [0]*n_soft_constraint])
 
-    if opt["algorithm"] == 'curve_fit':
+    if algo == 'curve_fit':
         if 'maxfev' not in kwargs:
             kwargs['maxfev'] = 1e5
         if 'ftol' not in kwargs:
@@ -367,7 +407,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         # https://stackoverflow.com/a/52275674/5144795
         perror = np.sqrt(np.diag(pcov))
 
-    elif opt["algorithm"] == 'basinhopping':
+    elif algo == 'basinhopping':
         if 'seed' not in kwargs:
             kwargs['seed'] = 0
 
@@ -422,8 +462,8 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
             warnings.warn('Failed to compute perror')
             perror = None
 
-    elif opt["algorithm"] == 'least_squares':
-        method = opt.pop('method', 'trf')
+    elif algo == 'least_squares':
+        method = kwargs.pop('method', 'trf')
 
         from scipy.optimize import least_squares
         user_callback = kwargs.pop('callback', None)
@@ -445,57 +485,47 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
             pbar.close()
         popt = res.x * scale
         perror = calc_perror(res, len(target_Z) - len(popt), scale,
-                             name=opt["algorithm"])
+                             name=algo)
 
-    elif opt["algorithm"] == 'pygad':
+    elif algo == 'pygad':
         import pygad
 
         def fitness_func(ga_instance, solution, solution_idx):
             return 1. / obj_fn(solution)
 
-        gene_space = opt.pop('gene_space', None)
+        gene_space = kwargs.pop('gene_space', None)
         if gene_space is None and scaled_low is not None:
             gene_space = [{'low': low, 'high': high}
                           for low, high in zip(scaled_low, scaled_high)]
 
-        num_generations = opt.pop('num_generations', 1000)
-        num_parents_mating = opt.pop('num_parents_mating', 4)
-        sol_per_pop = opt.pop('sol_per_pop', 20)
+        num_generations = kwargs.pop('num_generations', 1000)
+        num_parents_mating = kwargs.pop('num_parents_mating', 4)
+        sol_per_pop = kwargs.pop('sol_per_pop', 20)
         num_genes = len(initial_guess)
 
-        initial_population = opt.pop('initial_population', None)
+        initial_population = kwargs.pop('initial_population', None)
         if initial_population is None:
-            if scaled_low is None:
-                raise ValueError("Bounds must be provided for PyGAD "
-                                 "optimization to generate the initial "
-                                 "population.")
-
-            if np.any(np.isinf(scaled_low)) or np.any(np.isinf(scaled_high)):
-                raise ValueError("Bounds must be finite for PyGAD "
-                                 "optimization to generate the initial "
-                                 "population.")
-
             initial_population = np.empty((sol_per_pop, num_genes))
             initial_population[0] = scaled_initial
-
             for i in range(1, sol_per_pop):
                 initial_population[i] = np.random.uniform(scaled_low,
                                                           scaled_high)
-
             initial_population = np.clip(initial_population, scaled_low,
                                          scaled_high)
         else:
             initial_population = np.array(initial_population) / scale
 
-        plot_pygad = opt.pop('plot', False)
-        user_on_generation = opt.pop('on_generation', None)
+        plot_pygad = kwargs.pop('plot', False)
+        user_on_generation = kwargs.pop('on_generation', None)
 
         def on_generation(ga_instance):
             if pbar is not None:
                 pbar.update(1)
             if user_on_generation:
-                user_on_generation(ga_instance)
+                return user_on_generation(ga_instance)
 
+        parent_selection_type = kwargs.pop('parent_selection_type', 'sss')
+        keep_elitism = kwargs.pop('keep_elitism', 1)
         ga_instance = pygad.GA(num_generations=num_generations,
                                num_parents_mating=num_parents_mating,
                                fitness_func=fitness_func,
@@ -504,9 +534,8 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
                                num_genes=num_genes,
                                gene_space=gene_space,
                                on_generation=on_generation,
-                               parent_selection_type=opt.pop(
-                                   'parent_selection_type', 'sss'),
-                               keep_elitism=opt.pop('keep_elitism', 1),
+                               parent_selection_type=parent_selection_type,
+                               keep_elitism=keep_elitism,
                                **kwargs)
         ga_instance.run()
         if pbar is not None:
@@ -520,7 +549,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         popt = solution * scale
         perror = None
 
-    elif opt["algorithm"] == 'pyswarms':
+    elif algo == 'pyswarms':
         import pyswarms as ps
 
         def fitness_func(x):
@@ -540,12 +569,12 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
 
         bounds_ps = (np.array(scaled_low), np.array(scaled_high))
 
-        options = opt.pop('options', {'c1': 0.5, 'c2': 0.3, 'w': 0.9})
-        n_particles = opt.pop('n_particles', 20)
-        iters = opt.pop('iters', 1000)
+        options = kwargs.pop('options', {'c1': 0.5, 'c2': 0.3, 'w': 0.9})
+        n_particles = kwargs.pop('n_particles', 20)
+        iters = kwargs.pop('iters', 1000)
         num_dimensions = len(initial_guess)
 
-        initial_population = opt.pop('initial_population', None)
+        initial_population = kwargs.pop('initial_population', None)
         if initial_population is None:
             initial_population = np.empty((n_particles, num_dimensions))
             initial_population[0] = scaled_initial
@@ -559,13 +588,14 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         else:
             initial_population = np.array(initial_population) / scale
 
+        verbose = kwargs.pop('verbose', pbar is None)
+        plot_pyswarms = kwargs.pop('plot', False)
         optimizer = ps.single.GlobalBestPSO(n_particles=n_particles,
                                             dimensions=num_dimensions,
                                             options=options,
                                             bounds=bounds_ps,
-                                            init_pos=initial_population)
-
-        verbose = opt.pop('verbose', pbar is None)
+                                            init_pos=initial_population,
+                                            **kwargs)
         cost, pos = optimizer.optimize(fitness_func, iters=iters,
                                        verbose=verbose)
         res = optimizer
@@ -573,7 +603,6 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         if pbar is not None:
             pbar.close()
 
-        plot_pyswarms = opt.pop('plot', False)
         if plot_pyswarms:
             from pyswarms.utils.plotters import plot_cost_history
             import matplotlib.pyplot as plt
@@ -583,8 +612,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         popt = pos * scale
         perror = None
 
-    elif callable(opt["algorithm"]):
-        algo = opt.pop('algorithm')
+    elif callable(algo):
         sig = inspect.signature(algo)
         valid_params = sig.parameters
 
@@ -609,7 +637,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD
                              for p in valid_params.values())
         ignored = []
-        for k, v in opt.items():
+        for k, v in kwargs.items():
             if k in valid_params or accepts_kwargs:
                 call_kwargs[k] = v
             else:
@@ -621,7 +649,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         popt = (res.x if hasattr(res, 'x') else res) * scale
         perror = calc_perror(res, len(target_Z) - len(popt), scale,
                              name=algo.__name__ if callable(algo)
-                             else str(opt["algorithm"]))
+                             else str(algo))
     else:
         raise ValueError(f"Unknown optimization algorithm: {opt['algorithm']}")
     if len(optimizations) > 0:
@@ -632,13 +660,13 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
                           scale=scale, **kwargs_org)
         if ret_obj:
             if len(ret) < 3:
-                ret.append(res)
+                ret.append((res, scale))
             else:
-                ret[2] = [res] + ret[2] if isinstance(ret[2], list) \
-                    else [res, ret[2]]
+                ret[2] = [(res, scale)] + ret[2] if isinstance(ret[2], list) \
+                    else [(res, scale), ret[2]]
         return ret
     else:
-        return [popt, perror, res] if ret_obj else [popt, perror]
+        return [popt, perror, (res, scale)] if ret_obj else [popt, perror]
 
 
 def wrapCircuit(circuit, constants, addn=0):
