@@ -21,12 +21,22 @@ def element(num_params, units, overwrite=False):
     overwrite : bool (default False)
         if true, overwrites any existing element; if false,
         raises OverwriteError if element name already exists.
+    All funtions accept parameter, frequency and a reference to np.array of
+    floats-vectors that stores gradient vector – Dz[i,j] = dz(f[i])/dp[j].
+    Each element would return both impedance and Dz.
+    For parallel element, we will modify Dz which will propogate back.
+    Note:
+        a = np.array([[1,2,3],[4,5,6]]); b = a[:,0:2]; b *= 2 modifies a
+        However, b = a[:,[0,1]]; b *= 2 does not modifies a.
+        Also if c = np.array([[7,8],[9,10]]), b[:] = c  modifies a (not b = c)
+        scl = np.array([10,20]); b = a[:,0]; b *= scl modfies a
+    Do [dzdp1,dzdp2 etc]
     """
 
     def decorator(func):
-        def wrapper(p, f):
+        def wrapper(p, f, Dz=None):
             typeChecker(p, f, func.__name__, num_params)
-            return func(p, f)
+            return func(p, f, Dz)
 
         wrapper.num_params = num_params
         wrapper.units = units
@@ -50,22 +60,41 @@ def element(num_params, units, overwrite=False):
     return decorator
 
 
-def s(series):
+def s(series_Dz):
     """sums elements in series
 
     Notes
     ---------
     .. math::
         Z = Z_1 + Z_2 + ... + Z_n
+        dZ_dp = dZ_1_dp + dZ_2_dp + ... + dZ_n_dp
 
     """
+    # series, Dz = series_Dz if isinstance(series_Dz,(tuple)) \
+    #                         else (series_Dz, None)
+    # Series should have 2 elements -- check if this is true
+    if isinstance(series_Dz[0], (tuple)):  # Passed z and dz/dp
+        series = []
+        Dz = []
+        for s_, dz_ in series_Dz:
+            series.append(s_)
+            Dz.append(dz_)
+    else:
+        series = series_Dz
+        Dz = None
+
     z = len(series[0]) * [0 + 0 * 1j]
     for elem in series:
         z += elem
-    return z
+    if Dz is None:
+        return z
+    dzdp = []
+    for dz in Dz:
+        dzdp.extend(dz)
+    return (z, dzdp)
 
 
-def p(parallel):
+def p(parallel_Dz):
     """adds elements in parallel
 
     Notes
@@ -73,12 +102,35 @@ def p(parallel):
     .. math::
 
         Z = \\frac{1}{\\frac{1}{Z_1} + \\frac{1}{Z_2} + ... + \\frac{1}{Z_n}}
-
+        Since
+        \\frac{1}{Z} = \\frac{1}{Z_1} + \\frac{1}{Z_2} + ... + \\frac{1}{Z_n}
+        \\frac{Dz}{Z^2} = \\frac{DZ_1}{Z_1^2} + \\frac{DZ_1}{Z_2^2} + ...
     """
+    # parallel, Dz = parallel_Dz if isinstance(parallel_Dz,(tuple)) \
+    #                         else (parallel_Dz, None)
+    if isinstance(parallel_Dz[0], (tuple)):  # Passed z and dz/dp
+        parallel = []
+        Dz = []
+        for p_, dz_ in parallel_Dz:
+            parallel.append(p_)
+            Dz.append(dz_)
+    else:
+        parallel = parallel_Dz
+        Dz = None
+
     z = len(parallel[0]) * [0 + 0 * 1j]
     for elem in parallel:
         z += 1 / elem
-    return 1 / z
+    zp = 1 / z
+    if Dz is None:
+        return zp
+
+    dzdp = []
+    for elem, dzs in zip(parallel, Dz):
+        for dz in dzs:
+            dz *= zp**2/elem**2
+            dzdp += [dz]
+    return zp, dzdp
 
 
 # manually add parallel and series operators to circuit elements w/o metadata
@@ -88,8 +140,12 @@ def p(parallel):
 circuit_elements = {"s": s, "p": p}
 
 
+def aslist(dzdp):
+    return [dzdp[:, c] for c in range(dzdp.shape[1])]
+
+
 @element(num_params=1, units=["Ohm"])
-def R(p, f):
+def R(p, f, dzdp):
     """defines a resistor
 
     Notes
@@ -100,12 +156,15 @@ def R(p, f):
 
     """
     R = p[0]
-    Z = np.array(len(f) * [R])
-    return Z
+    Z = np.array(len(f) * [R], dtype=complex)
+    if dzdp is None:
+        return Z
+    dzdp[:, 0] = np.ones(len(f), dtype=complex)
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=1, units=["F"])
-def C(p, f):
+def C(p, f, dzdp):
     """defines a capacitor
 
     .. math::
@@ -116,11 +175,14 @@ def C(p, f):
     omega = 2 * np.pi * np.array(f)
     C = p[0]
     Z = 1.0 / (C * 1j * omega)
-    return Z
+    if dzdp is None:
+        return Z
+    dzdp[:, 0] = -1.0 / (C**2 * 1j * omega)
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=1, units=["H"])
-def L(p, f):
+def L(p, f, dzdp):
     """defines an inductor
 
     .. math::
@@ -131,11 +193,14 @@ def L(p, f):
     omega = 2 * np.pi * np.array(f)
     L = p[0]
     Z = L * 1j * omega
-    return Z
+    if dzdp is None:
+        return Z
+    dzdp[:, 0] = 1j * omega
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=1, units=["Ohm sec^-1/2"])
-def W(p, f):
+def W(p, f, dzdp):
     """defines a semi-infinite Warburg element
 
     Notes
@@ -147,11 +212,14 @@ def W(p, f):
     omega = 2 * np.pi * np.array(f)
     Aw = p[0]
     Z = Aw * (1 - 1j) / np.sqrt(omega)
-    return Z
+    if dzdp is None:
+        return Z
+    dzdp[:, 0] = (1 - 1j) / np.sqrt(omega)
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=2, units=["Ohm", "sec"])
-def Wo(p, f):
+def Wo(p, f, dzdp):
     """defines an open (finite-space) Warburg element
 
     Notes
@@ -159,7 +227,8 @@ def Wo(p, f):
     .. math::
         Z = \\frac{Z_0}{\\sqrt{ j \\omega \\tau }}
         \\coth{\\sqrt{j \\omega \\tau }}
-
+          = \\frac{Z_0}{\\sqrt{ j \\omega \\tau }
+                    \\tanh{\\sqrt{j \\omega \\tau }}}
     where :math:`Z_0` = p[0] (Ohms) and
     :math:`\\tau` = p[1] (sec) = :math:`\\frac{L^2}{D}`
 
@@ -174,11 +243,24 @@ def Wo(p, f):
     tanh[mask] = np.tanh(arg[mask])
 
     Z = Z0 / (arg * tanh)
-    return Z  # Zw(omega)
+    if dzdp is None:
+        return Z
+
+    # d/dx coth = -csch^2
+    csch2 = np.zeros_like(arg, dtype=complex)
+    csch2[mask] = 1.0 / (np.sinh(arg[mask])**2)
+    # darg/dtau = 1/(2 tau^0.5) * (1j*omega)^0.5 = arg/(2*tau)
+    # (d/dtau) z = -Z0/arg*coth * (arg^-1*arg') [1st part]
+    #            = -Z0/arg*coth * (arg^-1) * arg/(2*tau)
+    # (d/dtau) z = - Z0/arg*csch^2*arg'  [2nd part]
+    #            = -Z0/arg*csch^2*(arg/(2*tau))
+    dzdp[:, 0] = Z / Z0
+    dzdp[:, 1] = - Z / (2 * tau) - Z0 * csch2 / (2 * tau)
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=2, units=["Ohm", "sec"])
-def Ws(p, f):
+def Ws(p, f, dzdp):
     """defines a short (finite-length) Warburg element
 
     Notes
@@ -201,11 +283,20 @@ def Ws(p, f):
     tanh[mask] = np.tanh(arg[mask])
 
     Z = Z0 * tanh / arg
-    return Z
+    if dzdp is None:
+        return Z
+
+    # d/dx tanh = sech^2
+    sech2 = np.zeros_like(arg, dtype=complex)
+    sech2[mask] = 1.0 / (np.cosh(arg[mask])**2)
+
+    dzdp[:, 0] = Z / Z0
+    dzdp[:, 1] = Z0 * sech2 / (2 * tau) - Z / (2 * tau)
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=2, units=["Ohm^-1 sec^a", ""])
-def CPE(p, f):
+def CPE(p, f, dzdp):
     """defines a constant phase element
 
     Notes
@@ -219,11 +310,18 @@ def CPE(p, f):
     omega = 2 * np.pi * np.array(f)
     Q, alpha = p[0], p[1]
     Z = 1.0 / (Q * (1j * omega) ** alpha)
-    return Z
+    if dzdp is None:
+        return Z
+
+    # da^x/dx = lna * a^x
+    # dZ/dalpha = -z/(1j*omega)**alpha) * (1j*omega)**alpha*ln(1j*omega)
+    dzdp[:, 0] = - Z / Q
+    dzdp[:, 1] = - Z * np.log(1j * omega)
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=2, units=["H sec", ""])
-def La(p, f):
+def La(p, f, dzdp):
     """defines a modified inductance element as represented in [1]
 
     Notes
@@ -240,11 +338,16 @@ def La(p, f):
     omega = 2 * np.pi * np.array(f)
     L, alpha = p[0], p[1]
     Z = (L * 1j * omega) ** alpha
-    return Z
+    if dzdp is None:
+        return Z
+
+    dzdp[:, 0] = alpha * Z / L
+    dzdp[:, 1] = Z * np.log(L * 1j * omega)
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=2, units=["Ohm", "sec"])
-def G(p, f):
+def G(p, f, dzdp):
     """defines a Gerischer Element as represented in [1]
 
     Notes
@@ -278,12 +381,18 @@ def G(p, f):
     """
     omega = 2 * np.pi * np.array(f)
     R_G, t_G = p[0], p[1]
-    Z = R_G / np.sqrt(1 + 1j * omega * t_G)
-    return Z
+    u = np.sqrt(1 + 1j * omega * t_G)
+    Z = R_G / u
+    if dzdp is None:
+        return Z
+
+    dzdp[:, 0] = Z / R_G
+    dzdp[:, 1] = - Z * 1j * omega / (2 * u**2)
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=3, units=["Ohm", "sec", ""])
-def Gs(p, f):
+def Gs(p, f, dzdp):
     """defines a finite-length Gerischer Element as represented in [1]
 
     Notes
@@ -310,11 +419,39 @@ def Gs(p, f):
     tanh[mask] = np.tanh(arg[mask])
 
     Z = R_G / (np.sqrt(1 + 1j * omega * t_G) * tanh)
-    return Z
+    if dzdp is None:
+        return Z
+
+    # u = np.sqrt(1 + 1j * omega * t_G) = arg/phi
+    dzdp[:, 0] = Z / R_G
+
+    """
+    Z=R_G/(np.sqrt(1+1j*omega*t_G)*tanh(arg))
+    let dz/dtG = v1+v2
+    let arg_phi = np.sqrt(1+1j*omega*t_G)
+    v1 = -z/(arg_phi)*(1/(2*arg_phi) * 1j*omega = -z*1j*omega/(2*arg_phi^2)
+    v2 = -R_G/(arg_phi*sinh^2(arg)) * 0.5*phi*1j*omega/arg_phi
+       = -R_G/(2*arg_phi^2*sinh^2(arg)) * phi*1j*omega
+    """
+    argp = np.sqrt(1 + 1j * omega * t_G)
+    csch2 = np.zeros_like(arg, dtype=complex)
+    csch2[mask] = 1.0 / (np.sinh(arg[mask])**2)
+    dzdp[:, 1] = - Z * 1j * omega / (2 * argp ** 2) \
+                 - R_G * 1j * omega * phi**3 * csch2 / (2 * arg**2)
+
+    """
+    diff(Z,phi) = -(2*R_G)/(cosh(2*phi*(1+1j*omega*t_G)^(1/2)) - 1)
+    Since arg = phi * (1 + 1j * omega * t_G)^.5
+    diff(Z,phi) = -(2*R_G)/(cosh(2*arg) - 1)
+    Since cosh(2*arg) - 1 = cosh^2(arg) + sinh^2(arg) - 1 = 2 sinh^2(arg)
+    diff(Z,phi) = -R_G/sinh^2(arg)
+    """
+    dzdp[:, 2] = - R_G * csch2
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=2, units=["Ohm", "sec"])
-def K(p, f):
+def K(p, f, dzdp):
     """An RC element for use in lin-KK model
 
     Notes
@@ -327,11 +464,16 @@ def K(p, f):
     omega = 2 * np.pi * np.array(f)
     R, tau_k = p[0], p[1]
     Z = R / (1 + 1j * omega * tau_k)
-    return Z
+    if dzdp is None:
+        return Z
+
+    dzdp[:, 0] = Z / R
+    dzdp[:, 1] = - Z * 1j * omega / (1 + 1j * omega * tau_k)
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=3, units=['Ohm', 'sec', ''])
-def Zarc(p, f):
+def Zarc(p, f, dzdp):
     """ An RQ element rewritten with resistance and
     and time constant as paramenters. Equivalent to a
     Cole-Cole relaxation in dielectrics.
@@ -346,11 +488,18 @@ def Zarc(p, f):
     omega = 2 * np.pi * np.array(f)
     R, tau_k, gamma = p[0], p[1], p[2]
     Z = R / (1 + ((1j * omega * tau_k) ** gamma))
-    return Z
+    if dzdp is None:
+        return Z
+
+    dzdp[:, 0] = Z / R
+    dzdp[:, 1] = - Z**2 / R * gamma * ((1j * omega * tau_k) ** gamma) / tau_k
+    dzdp[:, 2] = - Z**2 / R * ((1j * omega * tau_k) ** gamma) \
+        * np.log(1j * omega * tau_k)
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=3, units=["Ohm", "F sec^(gamma - 1)", ""])
-def TLMQ(p, f):
+def TLMQ(p, f, dzdp):
     """Simplified transmission-line model as defined in Eq. 11 of [1]
 
     Notes
@@ -376,11 +525,18 @@ def TLMQ(p, f):
     tanh[mask] = np.tanh(arg[mask])
 
     Z = np.sqrt(Rion * Zs) / tanh
-    return Z
+    if dzdp is None:
+        return Z
+    csch2 = np.zeros_like(arg, dtype=complex)
+    csch2[mask] = 1.0 / (np.sinh(arg[mask])**2)
+    dzdp[:, 0] = Z / (2 * Rion) - 0.5 * csch2
+    dzdp[:, 1] = - Z / (2 * Qs) - Rion * csch2 / (2 * Qs)
+    dzdp[:, 2] = (- Z - Rion * csch2) * 0.5 * np.log(1j * omega)
+    return (Z, aslist(dzdp))
 
 
 @element(num_params=4, units=["Ohm-m^2", "Ohm-m^2", "", "sec"])
-def T(p, f):
+def T(p, f, dzdp):
     """A macrohomogeneous porous electrode model from Paasch et al. [1]
 
     Notes
@@ -424,7 +580,20 @@ def T(p, f):
     tanh[mask] = np.tanh(beta[mask])
 
     Z = A / (beta * tanh) + B / (beta * sinh)
-    return Z
+    if dzdp is None:
+        return Z
+
+    coth = 1.0 / tanh
+    csch = 1.0 / sinh
+    dz_dbeta = \
+        A * (- coth / beta**2 - csch**2 / beta) + \
+        B * (- csch / beta**2 - csch * coth / beta)
+
+    dzdp[:, 0] = coth / beta
+    dzdp[:, 1] = csch / beta
+    dzdp[:, 2] = dz_dbeta / (2 * beta)
+    dzdp[:, 3] = dz_dbeta * 1j * omega / (2 * beta)
+    return (Z, aslist(dzdp))
 
 
 def get_element_from_name(name):
