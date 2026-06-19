@@ -193,7 +193,7 @@ def pow_of_10(num, dirn=0):
 def circuit_fit(frequencies, impedances, circuit, initial_guess,
                 constants={}, bounds=None, weight_by_modulus=False,
                 global_opt=False, optimizations=[], scale=None,
-                use_jac=True, **kwargs):
+                **kwargs):
 
     """ Main function for fitting an equivalent circuit to data.
 
@@ -256,15 +256,15 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
 
             List could be a list of dics (in the above format). This is used
             for sequential optimizations, particularly useful for GA.
+            For 'least_squares', we use jacobian (unless we explicitly set 
+            use_jac=False). For callable func, it is possible to get jacobian 
+            by setting use_jac=True
 
     scale : list, optional
         Used to denote "scale" of prameters to improve convergence.
         Consider a p(R,C) or R-C circuit. Suppose C-s is in μF while,
         R-s might be in ~0.1 ohms; we can pass [0.1,1e-6].
         Internally the parameters are divided by scale during optimization.
-
-    use_jac : bool, optional (default true)
-        Use jacobian if possible
 
     kwargs :
         Keyword arguments passed to scipy.optimize.curve_fit or
@@ -331,7 +331,11 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         elif algo == 'basinhopping':
             kwargs['seed'] = seed
 
-    if algo in ('pygad', 'pyswarms', 'least_squares') or callable(algo):
+    use_jac = kwargs.pop("use_jac", not callable(algo)) \
+             if callable(algo) or algo in ('least_squares') \
+                else False
+        
+    if callable(algo) or algo in ('pygad', 'pyswarms', 'least_squares') :
         n_soft_constraint = 0
         if 'soft_constraint' in kwargs:
             soft_constraint = kwargs.pop('soft_constraint')
@@ -674,6 +678,8 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
                 call_kwargs[k] = v
             else:
                 ignored.append(k)
+        if use_jac:
+            call_kwargs["jac"] = jac
         if ignored != []:
             warn('Ignored ' + ','.join(ignored))
 
