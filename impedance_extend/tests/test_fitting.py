@@ -1,3 +1,4 @@
+import time
 from impedance_extend.preprocessing import ignoreBelowX
 from impedance_extend.models.circuits.fitting import buildCircuit, \
     circuit_fit, rmse, extract_circuit_elements, \
@@ -155,7 +156,7 @@ def get_data():
          np.array([10, 100, 1000]), np.array([10, 10, 10])),
         ('R0-p(R1,C1)-p(R2-Wo1,C2)',
          [.01, .01, 100, .01, .05, 100, 1],
-         np.array([1e-2, 1e-2, 0.1, 1e-2, 1e-1, 1e3, 1]),
+         np.array([1e-2, 1e-2, 1e2, 1e-2, 1e-1, 1e2, 1]),
          [1.65e-2, 5.34e-3, 0.22, 9.15e-3, 1.31e-1, 1.10e3, 2.78],
          [(0, 0, 0, 0, 0, 0, 0), (10, 1, 1e3, 1, 1, 1e4, 100)],
          example_frequencies_filtered, Z_correct_filtered)
@@ -185,6 +186,46 @@ def test_circuit_fit_least_squares():
         err = rmse(Z_data, Z_fit)
         assert np.allclose(results, calc, rtol=1e-1) or err <= rmse_limit, \
             f'Failed {circuit}: {results} != {calc}; RMSE={err}'
+
+
+def test_circuit_fit_least_squares_comparejac(capsys):
+    data = get_data()
+    optimizations = {'algorithm': 'least_squares'}
+    for circuit, initial_guess, scale, results, bounds, frequencies, \
+            Z_data in data:
+        constants = {}
+        buildCircuit_text = buildCircuit(circuit, constants=constants,
+                                         eval_string='', index=0)[0]
+        builtCircuit = eval('lambda frequencies,parameters : ' +
+                            buildCircuit_text, circuit_elements)
+        start_1 = time.perf_counter()
+        calc1 = circuit_fit(frequencies, Z_data, circuit,
+                           initial_guess, constants={},
+                           optimizations=optimizations.copy(),
+                           scale=scale, bounds=bounds, use_jac=False)[0]
+        end_1 = time.perf_counter()
+        time_1 = end_1 - start_1
+        f = np.array(frequencies, dtype=float)
+        Z_fit1 = builtCircuit(f, calc1)
+        start_2 = time.perf_counter()
+        calc2 = circuit_fit(frequencies, Z_data, circuit,
+                           initial_guess, constants={},
+                           optimizations=optimizations.copy(),
+                           scale=scale, bounds=bounds)[0]
+        end_2 = time.perf_counter()
+        time_2 = end_2 - start_2
+        Z_fit2 = builtCircuit(f, calc2)
+        err = rmse(Z_fit1, Z_fit2)
+        assert np.allclose(calc1, calc2, rtol=1e-1) or err <= rmse_limit, \
+            f'Failed {circuit}: {calc1} != {calc2}; RMSE={err}'
+        
+        ratio = time_2 / time_1
+        
+        with capsys.disabled():
+            print(f"\nFor {circuit}, approach "
+                  f"without JAC took {time_1:.5f}, "
+                  f"and with JAC: {time_2:.5f}s. "
+                  f"Using JAC took {ratio * 100:.4f}% time.")
 
 
 def test_circuit_fit_ga():
