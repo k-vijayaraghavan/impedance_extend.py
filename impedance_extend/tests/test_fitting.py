@@ -188,7 +188,7 @@ def test_circuit_fit_least_squares():
             f'Failed {circuit}: {results} != {calc}; RMSE={err}'
 
 
-def test_circuit_fit_least_squares_comparejac(capsys):
+def test_circuit_fit_least_squares_comparejac(track_diff):
     data = get_data()
     optimizations = {'algorithm': 'least_squares'}
     for circuit, initial_guess, scale, results, bounds, frequencies, \
@@ -198,34 +198,26 @@ def test_circuit_fit_least_squares_comparejac(capsys):
                                          eval_string='', index=0)[0]
         builtCircuit = eval('lambda frequencies,parameters : ' +
                             buildCircuit_text, circuit_elements)
-        start_1 = time.perf_counter()
+        start = time.perf_counter()
         calc1 = circuit_fit(frequencies, Z_data, circuit,
                            initial_guess, constants={},
                            optimizations=optimizations.copy(),
                            scale=scale, bounds=bounds, use_jac=False)[0]
-        end_1 = time.perf_counter()
-        time_1 = end_1 - start_1
+        data = {}
+        data["without JAC"] = time.perf_counter() - start
         f = np.array(frequencies, dtype=float)
         Z_fit1 = builtCircuit(f, calc1)
-        start_2 = time.perf_counter()
+        start = time.perf_counter()
         calc2 = circuit_fit(frequencies, Z_data, circuit,
                            initial_guess, constants={},
                            optimizations=optimizations.copy(),
                            scale=scale, bounds=bounds)[0]
-        end_2 = time.perf_counter()
-        time_2 = end_2 - start_2
+        data["with JAC"] = time.perf_counter() - start
+        track_diff[circuit] = data
         Z_fit2 = builtCircuit(f, calc2)
         err = rmse(Z_fit1, Z_fit2)
         assert np.allclose(calc1, calc2, rtol=1e-1) or err <= rmse_limit, \
             f'Failed {circuit}: {calc1} != {calc2}; RMSE={err}'
-        
-        ratio = time_2 / time_1
-        
-        with capsys.disabled():
-            print(f"\nFor {circuit}, approach "
-                  f"without JAC took {time_1:.5f}, "
-                  f"and with JAC: {time_2:.5f}s. "
-                  f"Using JAC took {ratio * 100:.4f}% time.")
 
 
 def test_circuit_fit_ga():
