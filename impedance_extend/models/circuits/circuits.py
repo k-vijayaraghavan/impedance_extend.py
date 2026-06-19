@@ -111,7 +111,7 @@ class BaseCircuit:
         else:
             raise ValueError('No initial guess supplied')
 
-        if (self.conf_ is not None) and self.conf_.all():
+        if (self.conf_ is not None):
             # For CPEx_1|Lax_1|TLMQ_2, check significance of value < 1
             # For other parameter check significance value > 0
 
