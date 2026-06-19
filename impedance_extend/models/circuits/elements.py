@@ -21,8 +21,9 @@ def element(num_params, units, overwrite=False):
     overwrite : bool (default False)
         if true, overwrites any existing element; if false,
         raises OverwriteError if element name already exists.
-    All funtions accept parameter, frequency and a reference to np.array of
-    floats-vectors that stores gradient vector – Dz[i,j] = dz(f[i])/dp[j].
+    All funtions accept parameter, frequency and a reference to list of 
+    np.array of floats-vectors that stores gradient vector – 
+    Dz[i,j] = dz(f[i])/dp[j] for non-constant parameters.
     Each element would return both impedance and Dz.
     For parallel element, we will modify Dz which will propogate back.
     Note:
@@ -140,10 +141,6 @@ def p(parallel_Dz):
 circuit_elements = {"s": s, "p": p}
 
 
-def aslist(dzdp):
-    return [dzdp[:, c] for c in range(dzdp.shape[1])]
-
-
 @element(num_params=1, units=["Ohm"])
 def R(p, f, dzdp):
     """defines a resistor
@@ -159,8 +156,9 @@ def R(p, f, dzdp):
     Z = np.array(len(f) * [R], dtype=complex)
     if dzdp is None:
         return Z
-    dzdp[:, 0] = np.ones(len(f), dtype=complex)
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = np.ones(len(f), dtype=complex)
+    return (Z, dzdp)
 
 
 @element(num_params=1, units=["F"])
@@ -177,8 +175,9 @@ def C(p, f, dzdp):
     Z = 1.0 / (C * 1j * omega)
     if dzdp is None:
         return Z
-    dzdp[:, 0] = -1.0 / (C**2 * 1j * omega)
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = -1.0 / (C**2 * 1j * omega)
+    return (Z, dzdp)
 
 
 @element(num_params=1, units=["H"])
@@ -195,8 +194,9 @@ def L(p, f, dzdp):
     Z = L * 1j * omega
     if dzdp is None:
         return Z
-    dzdp[:, 0] = 1j * omega
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = 1j * omega
+    return (Z, dzdp)
 
 
 @element(num_params=1, units=["Ohm sec^-1/2"])
@@ -214,8 +214,9 @@ def W(p, f, dzdp):
     Z = Aw * (1 - 1j) / np.sqrt(omega)
     if dzdp is None:
         return Z
-    dzdp[:, 0] = (1 - 1j) / np.sqrt(omega)
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = (1 - 1j) / np.sqrt(omega)
+    return (Z, dzdp)
 
 
 @element(num_params=2, units=["Ohm", "sec"])
@@ -254,9 +255,11 @@ def Wo(p, f, dzdp):
     #            = -Z0/arg*coth * (arg^-1) * arg/(2*tau)
     # (d/dtau) z = - Z0/arg*csch^2*arg'  [2nd part]
     #            = -Z0/arg*csch^2*(arg/(2*tau))
-    dzdp[:, 0] = Z / Z0
-    dzdp[:, 1] = - Z / (2 * tau) - Z0 * csch2 / (2 * tau)
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = Z / Z0
+    if dzdp[1] is not None:
+        dzdp[1][:] = - Z / (2 * tau) - Z0 * csch2 / (2 * tau)
+    return (Z, dzdp)
 
 
 @element(num_params=2, units=["Ohm", "sec"])
@@ -290,9 +293,11 @@ def Ws(p, f, dzdp):
     sech2 = np.zeros_like(arg, dtype=complex)
     sech2[mask] = 1.0 / (np.cosh(arg[mask])**2)
 
-    dzdp[:, 0] = Z / Z0
-    dzdp[:, 1] = Z0 * sech2 / (2 * tau) - Z / (2 * tau)
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = Z / Z0
+    if dzdp[1] is not None:
+        dzdp[1][:] = Z0 * sech2 / (2 * tau) - Z / (2 * tau)
+    return (Z, dzdp)
 
 
 @element(num_params=2, units=["Ohm^-1 sec^a", ""])
@@ -315,9 +320,11 @@ def CPE(p, f, dzdp):
 
     # da^x/dx = lna * a^x
     # dZ/dalpha = -z/(1j*omega)**alpha) * (1j*omega)**alpha*ln(1j*omega)
-    dzdp[:, 0] = - Z / Q
-    dzdp[:, 1] = - Z * np.log(1j * omega)
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = - Z / Q
+    if dzdp[1] is not None:
+        dzdp[1][:] = - Z * np.log(1j * omega)
+    return (Z, dzdp)
 
 
 @element(num_params=2, units=["H sec", ""])
@@ -341,9 +348,11 @@ def La(p, f, dzdp):
     if dzdp is None:
         return Z
 
-    dzdp[:, 0] = alpha * Z / L
-    dzdp[:, 1] = Z * np.log(L * 1j * omega)
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = alpha * Z / L
+    if dzdp[1] is not None:
+        dzdp[1][:] = Z * np.log(L * 1j * omega)
+    return (Z, dzdp)
 
 
 @element(num_params=2, units=["Ohm", "sec"])
@@ -386,9 +395,11 @@ def G(p, f, dzdp):
     if dzdp is None:
         return Z
 
-    dzdp[:, 0] = Z / R_G
-    dzdp[:, 1] = - Z * 1j * omega / (2 * u**2)
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = Z / R_G
+    if dzdp[1] is not None:
+        dzdp[1][:] = - Z * 1j * omega / (2 * u**2)
+    return (Z, dzdp)
 
 
 @element(num_params=3, units=["Ohm", "sec", ""])
@@ -423,7 +434,8 @@ def Gs(p, f, dzdp):
         return Z
 
     # u = np.sqrt(1 + 1j * omega * t_G) = arg/phi
-    dzdp[:, 0] = Z / R_G
+    if dzdp[0] is not None:
+        dzdp[0][:] = Z / R_G
 
     """
     Z=R_G/(np.sqrt(1+1j*omega*t_G)*tanh(arg))
@@ -436,7 +448,8 @@ def Gs(p, f, dzdp):
     argp = np.sqrt(1 + 1j * omega * t_G)
     csch2 = np.zeros_like(arg, dtype=complex)
     csch2[mask] = 1.0 / (np.sinh(arg[mask])**2)
-    dzdp[:, 1] = - Z * 1j * omega / (2 * argp ** 2) \
+    if dzdp[1] is not None:
+        dzdp[1][:] = - Z * 1j * omega / (2 * argp ** 2) \
                  - R_G * 1j * omega * phi**3 * csch2 / (2 * arg**2)
 
     """
@@ -446,8 +459,9 @@ def Gs(p, f, dzdp):
     Since cosh(2*arg) - 1 = cosh^2(arg) + sinh^2(arg) - 1 = 2 sinh^2(arg)
     diff(Z,phi) = -R_G/sinh^2(arg)
     """
-    dzdp[:, 2] = - R_G * csch2
-    return (Z, aslist(dzdp))
+    if dzdp[2] is not None:
+        dzdp[2][:] = - R_G * csch2
+    return (Z, dzdp)
 
 
 @element(num_params=2, units=["Ohm", "sec"])
@@ -467,9 +481,11 @@ def K(p, f, dzdp):
     if dzdp is None:
         return Z
 
-    dzdp[:, 0] = Z / R
-    dzdp[:, 1] = - Z * 1j * omega / (1 + 1j * omega * tau_k)
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = Z / R
+    if dzdp[1] is not None:
+        dzdp[1][:] = - Z * 1j * omega / (1 + 1j * omega * tau_k)
+    return (Z, dzdp)
 
 
 @element(num_params=3, units=['Ohm', 'sec', ''])
@@ -491,11 +507,14 @@ def Zarc(p, f, dzdp):
     if dzdp is None:
         return Z
 
-    dzdp[:, 0] = Z / R
-    dzdp[:, 1] = - Z**2 / R * gamma * ((1j * omega * tau_k) ** gamma) / tau_k
-    dzdp[:, 2] = - Z**2 / R * ((1j * omega * tau_k) ** gamma) \
+    if dzdp[0] is not None:
+        dzdp[0][:] = Z / R
+    if dzdp[1] is not None:
+        dzdp[1][:] = - Z**2 / R * gamma * ((1j * omega * tau_k) ** gamma) / tau_k
+    if dzdp[2] is not None:
+        dzdp[2][:] = - Z**2 / R * ((1j * omega * tau_k) ** gamma) \
         * np.log(1j * omega * tau_k)
-    return (Z, aslist(dzdp))
+    return (Z, dzdp)
 
 
 @element(num_params=3, units=["Ohm", "F sec^(gamma - 1)", ""])
@@ -529,10 +548,13 @@ def TLMQ(p, f, dzdp):
         return Z
     csch2 = np.zeros_like(arg, dtype=complex)
     csch2[mask] = 1.0 / (np.sinh(arg[mask])**2)
-    dzdp[:, 0] = Z / (2 * Rion) - 0.5 * csch2
-    dzdp[:, 1] = - Z / (2 * Qs) - Rion * csch2 / (2 * Qs)
-    dzdp[:, 2] = (- Z - Rion * csch2) * 0.5 * np.log(1j * omega)
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = Z / (2 * Rion) - 0.5 * csch2
+    if dzdp[1] is not None:
+        dzdp[1][:] = - Z / (2 * Qs) - Rion * csch2 / (2 * Qs)
+    if dzdp[2] is not None:
+        dzdp[2][:] = (- Z - Rion * csch2) * 0.5 * np.log(1j * omega)
+    return (Z, dzdp)
 
 
 @element(num_params=4, units=["Ohm-m^2", "Ohm-m^2", "", "sec"])
@@ -589,11 +611,15 @@ def T(p, f, dzdp):
         A * (- coth / beta**2 - csch**2 / beta) + \
         B * (- csch / beta**2 - csch * coth / beta)
 
-    dzdp[:, 0] = coth / beta
-    dzdp[:, 1] = csch / beta
-    dzdp[:, 2] = dz_dbeta / (2 * beta)
-    dzdp[:, 3] = dz_dbeta * 1j * omega / (2 * beta)
-    return (Z, aslist(dzdp))
+    if dzdp[0] is not None:
+        dzdp[0][:] = coth / beta
+    if dzdp[1] is not None:
+        dzdp[1][:] = csch / beta
+    if dzdp[2] is not None:
+        dzdp[2][:] = dz_dbeta / (2 * beta)
+    if dzdp[3] is not None:
+        dzdp[3][:] = dz_dbeta * 1j * omega / (2 * beta)
+    return (Z, dzdp)
 
 
 def get_element_from_name(name):

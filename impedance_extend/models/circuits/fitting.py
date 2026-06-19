@@ -146,26 +146,31 @@ def is_scalarval(var, val):
 
 
 def calc_perror(res, df, scale=1, name=""):
-    if hasattr(res, 'jac'):
-        _, s, VT = svd(res.jac, full_matrices=False)
-        threshold = np.finfo(float).eps * max(res.jac.shape) * s[0]
-        s = s[s > threshold]
-        VT = VT[:s.size]
-        pcov = np.dot(VT.T / s**2, VT)
-        cost = 2 * res.cost
-        # df = len(target_Z) - len(popt)
-        if df > 0:
-            pcov = pcov * (cost / df)
-        pcov = pcov * np.outer(scale, scale)
-    elif hasattr(res, 'hess_inv'):
+    try:
         pcov = res.hess_inv
         if hasattr(pcov, "todense"):
             pcov = pcov.todense()
         pcov = pcov * np.outer(scale, scale)
-    else:
-        warnings.warn('Failed to compute perror as this version of '
-                      'least_squares returns neither "hess_inv" nor "jac"')
-        return None
+        return np.sqrt(np.diag(pcov))
+    except:
+        try:
+            res_jac = res['jac'] if isinstance(res,dict) else res.jac 
+            res_cost = res['cost'] if isinstance(res,dict) else res.cost 
+        except:
+            warnings.warn('Failed to compute perror as this version of '
+                        'algorithm returns neither "hess_inv" nor "jac"')
+            return None
+    if res_jac is not None:
+        _, s, VT = svd(res_jac, full_matrices=False)
+        threshold = np.finfo(float).eps * max(res_jac.shape) * s[0]
+        s = s[s > threshold]
+        VT = VT[:s.size]
+        pcov = np.dot(VT.T / s**2, VT)
+        cost = 2 * res_cost
+        # df = len(target_Z) - len(popt)
+        if df > 0:
+            pcov = pcov * (cost / df)
+        pcov = pcov * np.outer(scale, scale)
     return np.sqrt(np.diag(pcov))
 
 
@@ -188,7 +193,7 @@ def pow_of_10(num, dirn=0):
 def circuit_fit(frequencies, impedances, circuit, initial_guess,
                 constants={}, bounds=None, weight_by_modulus=False,
                 global_opt=False, optimizations=[], scale=None,
-                **kwargs):
+                use_jac=True, **kwargs):
 
     """ Main function for fitting an equivalent circuit to data.
 
@@ -258,6 +263,9 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         R-s might be in ~0.1 ohms; we can pass [0.1,1e-6].
         Internally the parameters are divided by scale during optimization.
 
+    use_jac : bool, optional (default true)
+        Use jacobian if possible
+
     kwargs :
         Keyword arguments passed to scipy.optimize.curve_fit or
         scipy.optimize.basinhopping
@@ -324,8 +332,17 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
             kwargs['seed'] = seed
 
     if algo in ('pygad', 'pyswarms', 'least_squares') or callable(algo):
-        n_soft_constraint = 1
-        soft_constraint = kwargs.pop('soft_constraint', lambda p: 0)
+        n_soft_constraint = 0
+        if 'soft_constraint' in kwargs:
+            soft_constraint = kwargs.pop('soft_constraint')
+            n_soft_constraint = 1
+        if use_jac:
+                if n_soft_constraint > 0 :
+                    if 'soft_constraint_jac' in kwargs:
+                        soft_constraint_jac = kwargs.pop('soft_constraint_jac')
+                    else:
+                        warnings.warn("soft_constraint_jac is missing.")
+                        use_jac = False
 
         if weight_by_modulus:
             abs_Z = np.abs(Z)
@@ -356,7 +373,8 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
             p_unscaled = p_scaled * scale
             try:
                 pred_Z = wrapedCircuit(f, *p_unscaled)
-                pred_Z[-1] = soft_constraint(p_unscaled) * len(f)
+                if n_soft_constraint > 0:
+                    pred_Z[-1] = soft_constraint(p_unscaled) * len(f) #Check
                 error = (pred_Z - target_Z) / sigma
             except Exception:
                 return np.inf
@@ -384,8 +402,22 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         ret_obj = False
         n_soft_constraint = 0
 
-    wrapedCircuit = wrapCircuit(circuit, constants, n_soft_constraint)
+    wrapedCircuit, wrapedJac = wrapCircuit(circuit, constants, n_soft_constraint, retun_jac=True if use_jac else 2)
     target_Z = np.hstack([Z.real, Z.imag, [0]*n_soft_constraint])
+    if use_jac:
+        def jac(p_scaled):
+            # We jeed jac to be (an m-by-n matrix, where jac(i, j) is the 
+            # partial derivative of f[i] with respect to x[j]).
+            p_unscaled = p_scaled * scale
+            try:
+                pred_jac = wrapedJac(f, *p_unscaled)
+                if n_soft_constraint > 0:
+                     pred_jac[-1] = soft_constraint_jac(p_unscaled) * len(f)
+            except Exception:
+                return np.inf
+            return pred_jac
+    else:
+        jac = '2-point'
 
     if algo == 'curve_fit':
         if 'maxfev' not in kwargs:
@@ -479,7 +511,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
             kwargs['callback'] = combined_callback
         else:
             warn('This version of least_squares does not support "callback"')
-        res = least_squares(obj_fn, scaled_initial, method=method,
+        res = least_squares(obj_fn, scaled_initial, method=method, jac=jac,
                             bounds=min_bounds_scaled, **kwargs)
         if pbar is not None:
             pbar.close()
@@ -657,7 +689,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
                           initial_guess=popt, constants=constants,
                           bounds=bounds_, weight_by_modulus=weight_by_modulus,
                           global_opt=False, optimizations=optimizations,
-                          scale=scale, **kwargs_org)
+                          scale=scale, use_jac=use_jac, **kwargs_org)
         if ret_obj:
             if len(ret) < 3:
                 ret.append((res, scale))
@@ -669,7 +701,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         return [popt, perror, (res, scale)] if ret_obj else [popt, perror]
 
 
-def wrapCircuit(circuit, constants, addn=0):
+def wrapCircuit(circuit, constants, addn=0, retun_jac=False):
     """ wraps function so we can pass the circuit string """
     buildCircuit_text = buildCircuit(circuit, constants=constants,
                                      eval_string='', index=0)[0]
@@ -698,10 +730,44 @@ def wrapCircuit(circuit, constants, addn=0):
         y_imag = np.imag(x)
 
         return np.hstack([y_real, y_imag, [0]*addn])
-    return wrappedCircuit
+
+    if not retun_jac:
+        return wrappedCircuit
+    elif retun_jac == 2:
+        return wrappedCircuit, None
+   
+    buildJac_text = buildCircuit(circuit, constants=constants, jac=True,
+                                     eval_string='', index=0)[0]
+    builtJac = eval('lambda frequencies,parameters,dzdp : ' +
+                        buildJac_text, circuit_elements)
+    def wrappedJac(frequencies, *parameters):
+        """ returns a stacked array of real and imaginary impedance jac
+        components
+
+        Parameters
+        ----------
+        circuit : string
+        constants : dict
+        parameters : list of floats
+        frequencies : list of floats
+
+        Returns
+        -------
+        array of floats
+
+        """
+        dzdp = np.zeros((len(frequencies), len(parameters)), dtype=complex)
+        dconstdp = np.zeros((addn, len(parameters)))
+        x = builtJac(frequencies, parameters, dzdp)
+        dzdp_real = np.real(dzdp)
+        dzdp_imag = np.imag(dzdp)
+
+        return np.vstack([dzdp_real, dzdp_imag, dconstdp])
+
+    return wrappedCircuit, wrappedJac
 
 
-def buildCircuit(circuit, constants=None, eval_string='', index=0):
+def buildCircuit(circuit, constants=None, jac=False, eval_string='', index=0):
     """ recursive function that transforms a circuit, parameters, and
     frequencies into a string that can be evaluated
 
@@ -711,6 +777,7 @@ def buildCircuit(circuit, constants=None, eval_string='', index=0):
     frequencies: list/tuple/array of floats
     parameters: list/tuple/array of floats
     constants: dict
+    jac: boolean, set true to return jacobian
 
     Returns
     -------
@@ -720,7 +787,13 @@ def buildCircuit(circuit, constants=None, eval_string='', index=0):
         For example if circuit=R1,CPE1 with CPE1_1 = const1, eval_string =
         "p(R(frequencies,[parameters[0]), CPE(frequencies,[p[1],const1]))";
         We can then construct lambda frequencies,parameters : <eval_string>
-
+        When `jac=True`, the eval_string also evaluates jacobian. The 
+        eval_string = "p(R(frequencies,[parameters[0],dzdp[:,0]), 
+        CPE(frequencies,[p[1],const1],dzdp[:,1]))";
+        We can then create 
+        dzdp = np.zeros((len(freqs), len(parameters)), dtype=complex)
+        construct lambda frequencies,parameters,dzdp : <eval_string>, 
+        and return dzdp in a wrapper.
     index: int
         Tracks parameter index through recursive calling of the function
     """
@@ -784,16 +857,18 @@ def buildCircuit(circuit, constants=None, eval_string='', index=0):
 
     for i, elem in enumerate(split):
         if ',' in elem or '-' in elem:
-            eval_string, index = buildCircuit(elem, constants=constants,
-                                              eval_string=eval_string,
-                                              index=index)
+            eval_string, index = buildCircuit(elem, constants=constants, 
+                                              jac=jac, eval_string=\
+                                              eval_string, index=index)
         else:
             # Return a string that can be used to construct a lambda function
             # lambda f,p : R(f,[p[0],const1,p[1]...])
             param_string = ""
+            jac_string = ""
             raw_elem = get_element_from_name(elem)
             elem_number = check_and_eval(raw_elem).num_params
             param_list = []
+            jac_list = []
             for j in range(elem_number):
                 if elem_number > 1:
                     current_elem = elem + '_{}'.format(j)
@@ -802,12 +877,15 @@ def buildCircuit(circuit, constants=None, eval_string='', index=0):
 
                 if current_elem in constants.keys():
                     param_list.append(str(constants[current_elem]))
+                    jac_list.append(f'None')
                 else:
                     param_list.append(f'parameters[{index}]')
+                    jac_list.append(f'dzdp[:,{index}]') #dzdp[:, 0]
                     index += 1
 
             param_string = "[" + ','.join(param_list) + "]"
-            new = raw_elem + '(' + param_string + ', frequencies)'
+            jac_string = "[" + ','.join(jac_list) + "]"
+            new = raw_elem + '(' + param_string + ', frequencies' + ( ')' if not jac else f', {jac_string})' )
             eval_string += new
 
         if i == len(split) - 1:

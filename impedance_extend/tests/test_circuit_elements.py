@@ -108,7 +108,7 @@ def test_each_element_deravative():
             num_inputs = f.num_params
             input = input_vals[:num_inputs]
             dzdp = np.zeros((len(freqs), num_inputs), dtype=complex)
-            dzdp_ = dzdp[:, 0:num_inputs]
+            dzdp_ = [dzdp[:, i] for i in range(num_inputs)]
             val = f(input, freqs, dzdp_)[0]
             # Loop small varn
             input_ = input.copy()
@@ -150,10 +150,10 @@ def test_s_deravative():
             n_ins2 = f2.num_params
             input1 = input1_vals[0:n_ins1]
             dzdp = np.zeros((len(freqs), n_ins1+n_ins2), dtype=complex)
-            dzdp1_ = dzdp[:, 0:n_ins1]
+            dzdp1_ = [dzdp[:, i] for i in range(n_ins1)]
             val1 = f1(input1, freqs, dzdp1_)
             input2 = input2_vals[:n_ins2]
-            dzdp_ = dzdp[:, n_ins1:]
+            dzdp_ = [dzdp[:, i] for i in range(n_ins1,n_ins1+n_ins2)]
             val2 = f2(input2, freqs, dzdp_)
             val = comb([val1, val2])
             # Loop small varn
@@ -188,10 +188,10 @@ def test_p_deravative():
             n_ins2 = f2.num_params
             input1 = input1_vals[0:n_ins1]
             dzdp = np.zeros((len(freqs), n_ins1+n_ins2), dtype=complex)
-            dzdp1_ = dzdp[:, 0:n_ins1]
+            dzdp1_ = [dzdp[:, i] for i in range(n_ins1)]
             val1 = f1(input1, freqs, dzdp1_)
             input2 = input2_vals[:n_ins2]
-            dzdp_ = dzdp[:, n_ins1:]
+            dzdp_ = [dzdp[:, i] for i in range(n_ins1,n_ins1+n_ins2)]
             val2 = f2(input2, freqs, dzdp_)
             val = comb([val1, val2])
             # Loop small varn
