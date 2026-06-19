@@ -153,7 +153,7 @@ def test_s_deravative():
             dzdp1_ = [dzdp[:, i] for i in range(n_ins1)]
             val1 = f1(input1, freqs, dzdp1_)
             input2 = input2_vals[:n_ins2]
-            dzdp_ = [dzdp[:, i] for i in range(n_ins1,n_ins1+n_ins2)]
+            dzdp_ = [dzdp[:, i] for i in range(n_ins1, n_ins1+n_ins2)]
             val2 = f2(input2, freqs, dzdp_)
             val = comb([val1, val2])
             # Loop small varn
@@ -191,7 +191,7 @@ def test_p_deravative():
             dzdp1_ = [dzdp[:, i] for i in range(n_ins1)]
             val1 = f1(input1, freqs, dzdp1_)
             input2 = input2_vals[:n_ins2]
-            dzdp_ = [dzdp[:, i] for i in range(n_ins1,n_ins1+n_ins2)]
+            dzdp_ = [dzdp[:, i] for i in range(n_ins1, n_ins1+n_ins2)]
             val2 = f2(input2, freqs, dzdp_)
             val = comb([val1, val2])
             # Loop small varn

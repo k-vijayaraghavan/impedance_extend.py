@@ -21,8 +21,8 @@ def element(num_params, units, overwrite=False):
     overwrite : bool (default False)
         if true, overwrites any existing element; if false,
         raises OverwriteError if element name already exists.
-    All funtions accept parameter, frequency and a reference to list of 
-    np.array of floats-vectors that stores gradient vector – 
+    All funtions accept parameter, frequency and a reference to list of
+    np.array of floats-vectors that stores gradient vector –
     Dz[i,j] = dz(f[i])/dp[j] for non-constant parameters.
     Each element would return both impedance and Dz.
     For parallel element, we will modify Dz which will propogate back.
@@ -510,10 +510,11 @@ def Zarc(p, f, dzdp):
     if dzdp[0] is not None:
         dzdp[0][:] = Z / R
     if dzdp[1] is not None:
-        dzdp[1][:] = - Z**2 / R * gamma * ((1j * omega * tau_k) ** gamma) / tau_k
+        dzdp[1][:] = - Z**2 / R * gamma * ((1j * omega * tau_k) ** gamma) \
+                    / tau_k
     if dzdp[2] is not None:
         dzdp[2][:] = - Z**2 / R * ((1j * omega * tau_k) ** gamma) \
-        * np.log(1j * omega * tau_k)
+                     * np.log(1j * omega * tau_k)
     return (Z, dzdp)
 
 

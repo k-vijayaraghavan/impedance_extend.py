@@ -152,13 +152,13 @@ def calc_perror(res, df, scale=1, name=""):
             pcov = pcov.todense()
         pcov = pcov * np.outer(scale, scale)
         return np.sqrt(np.diag(pcov))
-    except:
+    except Exception:
         try:
-            res_jac = res['jac'] if isinstance(res,dict) else res.jac 
-            res_cost = res['cost'] if isinstance(res,dict) else res.cost 
-        except:
+            res_jac = res['jac'] if isinstance(res, dict) else res.jac
+            res_cost = res['cost'] if isinstance(res, dict) else res.cost
+        except Exception:
             warnings.warn('Failed to compute perror as this version of '
-                        'algorithm returns neither "hess_inv" nor "jac"')
+                          'algorithm returns neither "hess_inv" nor "jac"')
             return None
     if res_jac is not None:
         _, s, VT = svd(res_jac, full_matrices=False)
@@ -256,8 +256,8 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
 
             List could be a list of dics (in the above format). This is used
             for sequential optimizations, particularly useful for GA.
-            For 'least_squares', we use jacobian (unless we explicitly set 
-            use_jac=False). For callable func, it is possible to get jacobian 
+            For 'least_squares', we use jacobian (unless we explicitly set
+            use_jac=False). For callable func, it is possible to get jacobian
             by setting use_jac=True
 
     scale : list, optional
@@ -331,22 +331,23 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         elif algo == 'basinhopping':
             kwargs['seed'] = seed
 
-    use_jac = kwargs.pop("use_jac", not callable(algo)) \
-             if callable(algo) or algo in ('least_squares') \
-                else False
-        
-    if callable(algo) or algo in ('pygad', 'pyswarms', 'least_squares') :
+    if callable(algo) or algo in ('least_squares'):
+        use_jac = kwargs.pop("use_jac", not callable(algo))
+    else:
+        use_jac = False
+
+    if callable(algo) or algo in ('pygad', 'pyswarms', 'least_squares'):
         n_soft_constraint = 0
         if 'soft_constraint' in kwargs:
             soft_constraint = kwargs.pop('soft_constraint')
             n_soft_constraint = 1
         if use_jac:
-                if n_soft_constraint > 0 :
-                    if 'soft_constraint_jac' in kwargs:
-                        soft_constraint_jac = kwargs.pop('soft_constraint_jac')
-                    else:
-                        warnings.warn("soft_constraint_jac is missing.")
-                        use_jac = False
+            if n_soft_constraint > 0:
+                if 'soft_constraint_jac' in kwargs:
+                    soft_constraint_jac = kwargs.pop('soft_constraint_jac')
+                else:
+                    warnings.warn("soft_constraint_jac is missing.")
+                    use_jac = False
 
         if weight_by_modulus:
             abs_Z = np.abs(Z)
@@ -378,7 +379,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
             try:
                 pred_Z = wrapedCircuit(f, *p_unscaled)
                 if n_soft_constraint > 0:
-                    pred_Z[-1] = soft_constraint(p_unscaled) * len(f) #Check
+                    pred_Z[-1] = soft_constraint(p_unscaled) * len(f)
                 error = (pred_Z - target_Z) / sigma
             except Exception:
                 return np.inf
@@ -406,17 +407,19 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         ret_obj = False
         n_soft_constraint = 0
 
-    wrapedCircuit, wrapedJac = wrapCircuit(circuit, constants, n_soft_constraint, retun_jac=True if use_jac else 2)
+    wrapedCircuit, wrapedJac = wrapCircuit(circuit, constants,
+                                           n_soft_constraint,
+                                           retun_jac=True if use_jac else 2)
     target_Z = np.hstack([Z.real, Z.imag, [0]*n_soft_constraint])
     if use_jac:
         def jac(p_scaled):
-            # We jeed jac to be (an m-by-n matrix, where jac(i, j) is the 
+            # We jeed jac to be (an m-by-n matrix, where jac(i, j) is the
             # partial derivative of f[i] with respect to x[j]).
             p_unscaled = p_scaled * scale
             try:
                 pred_jac = wrapedJac(f, *p_unscaled)
                 if n_soft_constraint > 0:
-                     pred_jac[-1] = soft_constraint_jac(p_unscaled) * len(f)
+                    pred_jac[-1] = soft_constraint_jac(p_unscaled) * len(f)
             except Exception:
                 return np.inf
             return pred_jac
@@ -741,11 +744,12 @@ def wrapCircuit(circuit, constants, addn=0, retun_jac=False):
         return wrappedCircuit
     elif retun_jac == 2:
         return wrappedCircuit, None
-   
+
     buildJac_text = buildCircuit(circuit, constants=constants, jac=True,
-                                     eval_string='', index=0)[0]
+                                 eval_string='', index=0)[0]
     builtJac = eval('lambda frequencies,parameters,dzdp : ' +
-                        buildJac_text, circuit_elements)
+                    buildJac_text, circuit_elements)
+
     def wrappedJac(frequencies, *parameters):
         """ returns a stacked array of real and imaginary impedance jac
         components
@@ -764,7 +768,7 @@ def wrapCircuit(circuit, constants, addn=0, retun_jac=False):
         """
         dzdp = np.zeros((len(frequencies), len(parameters)), dtype=complex)
         dconstdp = np.zeros((addn, len(parameters)))
-        x = builtJac(frequencies, parameters, dzdp)
+        _ = builtJac(frequencies, parameters, dzdp)
         dzdp_real = np.real(dzdp)
         dzdp_imag = np.imag(dzdp)
 
@@ -793,12 +797,12 @@ def buildCircuit(circuit, constants=None, jac=False, eval_string='', index=0):
         For example if circuit=R1,CPE1 with CPE1_1 = const1, eval_string =
         "p(R(frequencies,[parameters[0]), CPE(frequencies,[p[1],const1]))";
         We can then construct lambda frequencies,parameters : <eval_string>
-        When `jac=True`, the eval_string also evaluates jacobian. The 
-        eval_string = "p(R(frequencies,[parameters[0],dzdp[:,0]), 
+        When `jac=True`, the eval_string also evaluates jacobian. The
+        eval_string = "p(R(frequencies,[parameters[0],dzdp[:,0]),
         CPE(frequencies,[p[1],const1],dzdp[:,1]))";
-        We can then create 
+        We can then create
         dzdp = np.zeros((len(freqs), len(parameters)), dtype=complex)
-        construct lambda frequencies,parameters,dzdp : <eval_string>, 
+        construct lambda frequencies,parameters,dzdp : <eval_string>,
         and return dzdp in a wrapper.
     index: int
         Tracks parameter index through recursive calling of the function
@@ -863,9 +867,9 @@ def buildCircuit(circuit, constants=None, jac=False, eval_string='', index=0):
 
     for i, elem in enumerate(split):
         if ',' in elem or '-' in elem:
-            eval_string, index = buildCircuit(elem, constants=constants, 
-                                              jac=jac, eval_string=\
-                                              eval_string, index=index)
+            eval_string, index = buildCircuit(elem, constants=constants,
+                                              jac=jac, eval_string=eval_string,
+                                              index=index)
         else:
             # Return a string that can be used to construct a lambda function
             # lambda f,p : R(f,[p[0],const1,p[1]...])
@@ -883,15 +887,16 @@ def buildCircuit(circuit, constants=None, jac=False, eval_string='', index=0):
 
                 if current_elem in constants.keys():
                     param_list.append(str(constants[current_elem]))
-                    jac_list.append(f'None')
+                    jac_list.append('None')
                 else:
                     param_list.append(f'parameters[{index}]')
-                    jac_list.append(f'dzdp[:,{index}]') #dzdp[:, 0]
+                    jac_list.append(f'dzdp[:,{index}]')
                     index += 1
 
             param_string = "[" + ','.join(param_list) + "]"
             jac_string = "[" + ','.join(jac_list) + "]"
-            new = raw_elem + '(' + param_string + ', frequencies' + ( ')' if not jac else f', {jac_string})' )
+            new = raw_elem + '(' + param_string + ', frequencies' + \
+                (')' if not jac else f', {jac_string})')
             eval_string += new
 
         if i == len(split) - 1:

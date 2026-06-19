@@ -200,18 +200,18 @@ def test_circuit_fit_least_squares_comparejac(track_diff):
                             buildCircuit_text, circuit_elements)
         start = time.perf_counter()
         calc1 = circuit_fit(frequencies, Z_data, circuit,
-                           initial_guess, constants={},
-                           optimizations=optimizations.copy(),
-                           scale=scale, bounds=bounds, use_jac=False)[0]
+                            initial_guess, constants={},
+                            optimizations=optimizations.copy(),
+                            scale=scale, bounds=bounds, use_jac=False)[0]
         data = {}
         data["without JAC"] = time.perf_counter() - start
         f = np.array(frequencies, dtype=float)
         Z_fit1 = builtCircuit(f, calc1)
         start = time.perf_counter()
         calc2 = circuit_fit(frequencies, Z_data, circuit,
-                           initial_guess, constants={},
-                           optimizations=optimizations.copy(),
-                           scale=scale, bounds=bounds)[0]
+                            initial_guess, constants={},
+                            optimizations=optimizations.copy(),
+                            scale=scale, bounds=bounds)[0]
         data["with JAC"] = time.perf_counter() - start
         track_diff[circuit] = data
         Z_fit2 = builtCircuit(f, calc2)
