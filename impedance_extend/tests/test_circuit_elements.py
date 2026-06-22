@@ -107,18 +107,62 @@ def test_each_element_deravative():
         if key not in ["s", "p", "np"]:
             num_inputs = f.num_params
             input = input_vals[:num_inputs]
-            dzdp = np.zeros((len(freqs), num_inputs), dtype=complex)
-            dzdp_ = [dzdp[:, i] for i in range(num_inputs)]
-            val = f(input, freqs, dzdp_)[0]
+            Js = np.zeros((len(freqs), num_inputs), dtype=complex)
+            Js_list = [Js[:, i] for i in range(num_inputs)]
+            val = f(input, freqs, Js_list)[0]
             # Loop small varn
             input_ = input.copy()
-            dzdp_num = np.zeros((len(freqs), num_inputs), dtype=complex)
+            Js_num = np.zeros((len(freqs), num_inputs), dtype=complex)
             for i in range(num_inputs):
                 input_[i] = 1.01*input[i]
                 val_ = f(input_, freqs)
-                dzdp_num[:, i] = (val_-val)/(0.01*input[i])
+                Js_num[:, i] = (val_-val)/(0.01*input[i])
                 input_[i] = input[i]
-            assert np.isclose(dzdp, dzdp_num, rtol=0.025).all()
+            assert np.isclose(Js, Js_num, rtol=0.025).all()
+
+
+def test_each_element_deravative_checks():
+    freqs = [0.001, 1.0, 1000]
+    input_vals = [0.1, 0.2, 0.3, 0.4]
+    # for key, f in circuit_elements.items():
+    name = "CPE"
+    f = circuit_elements[name]
+
+    num_inputs = f.num_params
+    input = input_vals[:num_inputs]
+
+    # Check type
+    Js_list = "Hi"
+    expected_einfo = "in {}, Js-input must be of type list".format(name)
+    with pytest.raises(AssertionError) as e_info:
+        _ = f(input, freqs, Js_list)[0]
+    assert str(e_info.value) == expected_einfo, "Incorrect type check"
+
+    # Check adding too many inputs
+    expected_einfo = "in {}, gradinet list must be length {}"\
+        .format(name, num_inputs)
+    Js = np.zeros((len(freqs)+1, num_inputs+1), dtype=complex)
+    Js_list = [Js[:, i] for i in range(num_inputs+1)]
+    with pytest.raises(AssertionError) as e_info:
+        _ = f(input, freqs, Js_list)[0]
+    assert str(e_info.value) == expected_einfo, "Incorrect list length check"
+
+    # Check freq length
+    Js_list = [Js[:, i] for i in range(num_inputs)]
+    expected_einfo = "in {}, len({}) must be equal to {}".\
+        format(name, Js_list[0], len(freqs))
+    with pytest.raises(AssertionError) as e_info:
+        _ = f(input, freqs, Js_list)[0]
+    assert str(e_info.value) == expected_einfo, "Incorrect freq length check"
+
+    # Check list expected_einfotype
+    Js_list[0] = [0] * len(freqs)
+    expected_einfo = "in {}, value {} in {} must be a numpy array".\
+        format(name, Js_list[0], Js_list)
+    with pytest.raises(AssertionError) as e_info:
+        _ = f(input, freqs, Js_list)[0]
+    assert str(e_info.value) == expected_einfo, \
+        "Incorrect list expected_einfotype check"
 
 
 def test_s():
@@ -149,30 +193,30 @@ def test_s_deravative():
         if key not in ["s", "p", "np"]:
             n_ins2 = f2.num_params
             input1 = input1_vals[0:n_ins1]
-            dzdp = np.zeros((len(freqs), n_ins1+n_ins2), dtype=complex)
-            dzdp1_ = [dzdp[:, i] for i in range(n_ins1)]
-            val1 = f1(input1, freqs, dzdp1_)
+            Js = np.zeros((len(freqs), n_ins1+n_ins2), dtype=complex)
+            Js1_ = [Js[:, i] for i in range(n_ins1)]
+            val1 = f1(input1, freqs, Js1_)
             input2 = input2_vals[:n_ins2]
-            dzdp_ = [dzdp[:, i] for i in range(n_ins1, n_ins1+n_ins2)]
-            val2 = f2(input2, freqs, dzdp_)
+            Js_list = [Js[:, i] for i in range(n_ins1, n_ins1+n_ins2)]
+            val2 = f2(input2, freqs, Js_list)
             val = comb([val1, val2])
             # Loop small varn
             input_ = input1.copy()
-            dzdp_num = np.zeros((len(freqs), n_ins1+n_ins2), dtype=complex)
+            Js_num = np.zeros((len(freqs), n_ins1+n_ins2), dtype=complex)
             for i in range(n_ins1):
                 input_[i] = 1.01*input1[i]
                 val1_ = f1(input_, freqs)
                 val_ = comb([val1_, val2[0]])
-                dzdp_num[:, i] = (val_-val[0])/(0.01*input1[i])
+                Js_num[:, i] = (val_-val[0])/(0.01*input1[i])
                 input_[i] = input1[i]
             input_ = input2.copy()
             for i in range(n_ins2):
                 input_[i] = 1.01*input2[i]
                 val2_ = f2(input_, freqs)
                 val_ = comb([val1[0], val2_])
-                dzdp_num[:, n_ins1+i] = (val_-val[0])/(0.01*input2[i])
+                Js_num[:, n_ins1+i] = (val_-val[0])/(0.01*input2[i])
                 input_[i] = input2[i]
-            assert np.isclose(dzdp, dzdp_num, rtol=0.025).all()
+            assert np.isclose(Js, Js_num, rtol=0.025).all()
 
 
 def test_p_deravative():
@@ -187,30 +231,30 @@ def test_p_deravative():
         if key not in ["s", "p", "np"]:
             n_ins2 = f2.num_params
             input1 = input1_vals[0:n_ins1]
-            dzdp = np.zeros((len(freqs), n_ins1+n_ins2), dtype=complex)
-            dzdp1_ = [dzdp[:, i] for i in range(n_ins1)]
-            val1 = f1(input1, freqs, dzdp1_)
+            Js = np.zeros((len(freqs), n_ins1+n_ins2), dtype=complex)
+            Js1_ = [Js[:, i] for i in range(n_ins1)]
+            val1 = f1(input1, freqs, Js1_)
             input2 = input2_vals[:n_ins2]
-            dzdp_ = [dzdp[:, i] for i in range(n_ins1, n_ins1+n_ins2)]
-            val2 = f2(input2, freqs, dzdp_)
+            Js_list = [Js[:, i] for i in range(n_ins1, n_ins1+n_ins2)]
+            val2 = f2(input2, freqs, Js_list)
             val = comb([val1, val2])
             # Loop small varn
             input_ = input1.copy()
-            dzdp_num = np.zeros((len(freqs), n_ins1+n_ins2), dtype=complex)
+            Js_num = np.zeros((len(freqs), n_ins1+n_ins2), dtype=complex)
             for i in range(n_ins1):
                 input_[i] = 1.01*input1[i]
                 val1_ = f1(input_, freqs)
                 val_ = comb([val1_, val2[0]])
-                dzdp_num[:, i] = (val_-val[0])/(0.01*input1[i])
+                Js_num[:, i] = (val_-val[0])/(0.01*input1[i])
                 input_[i] = input1[i]
             input_ = input2.copy()
             for i in range(n_ins2):
                 input_[i] = 1.01*input2[i]
                 val2_ = f2(input_, freqs)
                 val_ = comb([val1[0], val2_])
-                dzdp_num[:, n_ins1+i] = (val_-val[0])/(0.01*input2[i])
+                Js_num[:, n_ins1+i] = (val_-val[0])/(0.01*input2[i])
                 input_[i] = input2[i]
-            assert np.isclose(dzdp, dzdp_num, rtol=0.025).all()
+            assert np.isclose(Js, Js_num, rtol=0.025).all()
 
 
 def test_element_function_names():
@@ -238,7 +282,7 @@ def test_add_element():
     assert "NE" not in circuit_elements
 
     @element(num_params=1, units=["Ohm"])
-    def NE(p, f, dzdp):
+    def NE(p, f, Js):
         """definitely a new circuit element no one has seen before
 
         Notes
@@ -261,7 +305,7 @@ def test_add_element_overwrite_fails():
     assert "NE2" not in circuit_elements
 
     @element(num_params=1, units=["Ohm"])
-    def NE2(p, f, dzdp):
+    def NE2(p, f, Js):
         """definitely a new circuit element no one has seen before
 
         Notes
@@ -279,7 +323,7 @@ def test_add_element_overwrite_fails():
     with pytest.raises(OverwriteError):
         # try to create the same element again without overwrite
         @element(num_params=1, units=["Ohm"])
-        def NE2(p, f, dzdp):  # noqa: F811
+        def NE2(p, f, Js):  # noqa: F811
             """definitely a new circuit element no one has seen before
 
             Notes
@@ -300,7 +344,7 @@ def test_add_element_overwrite():
     assert "NE3" not in circuit_elements
 
     @element(num_params=1, units=["Ohm"])
-    def NE3(p, f, dzdp):
+    def NE3(p, f, Js):
         return [p * ff for ff in f]
 
     assert "NE3" in circuit_elements
@@ -308,7 +352,7 @@ def test_add_element_overwrite():
     # try to create the same element again with overwrite
 
     @element(num_params=1, units=["Ohm"], overwrite=True)
-    def NE3(p, f, dzdp):  # noqa: F811
+    def NE3(p, f, Js):  # noqa: F811
         # feel free to change to a better test
         return [p * ff * 2 for ff in f]
 

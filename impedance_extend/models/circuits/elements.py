@@ -21,23 +21,28 @@ def element(num_params, units, overwrite=False):
     overwrite : bool (default False)
         if true, overwrites any existing element; if false,
         raises OverwriteError if element name already exists.
-    All funtions accept parameter, frequency and a reference to list of
-    np.array of floats-vectors that stores gradient vector –
-    Dz[i,j] = dz(f[i])/dp[j] for non-constant parameters.
-    Each element would return both impedance and Dz.
-    For parallel element, we will modify Dz which will propogate back.
-    Note:
-        a = np.array([[1,2,3],[4,5,6]]); b = a[:,0:2]; b *= 2 modifies a
-        However, b = a[:,[0,1]]; b *= 2 does not modifies a.
-        Also if c = np.array([[7,8],[9,10]]), b[:] = c  modifies a (not b = c)
-        scl = np.array([10,20]); b = a[:,0]; b *= scl modfies a
-    Do [dzdp1,dzdp2 etc]
+
+    All funtions accept parameter, frequency and a list of (reference to)
+    np.array of floats-vectors that stores gradient vector.
+    Each element would calculate impedance and jacobian of the impedance at
+    different frequencies and return a 2-tuple consisting of impedance and
+    list of jacobian. If gradient vector is not provided, we do not calculate
+    the gradient; we return only the impedance.
+    In order to calculate the gradient (to be used for Jacobian)
+        Create a real-matrix param of size len(parameters)
+        Create a complex-matrix Js of size len(frequencies) × len(parameters)
+        If parameters k, k+1,...+(k+np-1) correspond to this element
+            Pass p=[param[k],param[k+1],...] or param[k:(k+np)], and
+            Js=[Js[:,k],Js[:,k+1],...] (Note: you cannot pass numpy array)
+            If the j-th parameter is constant, pass Js[j]=None
     """
 
     def decorator(func):
-        def wrapper(p, f, Dz=None):
+        def wrapper(p, f, J=None):
             typeChecker(p, f, func.__name__, num_params)
-            return func(p, f, Dz)
+            if J is not None:
+                jacChecker(J, f, func.__name__, num_params)
+            return func(p, f, J)
 
         wrapper.num_params = num_params
         wrapper.units = units
@@ -61,77 +66,86 @@ def element(num_params, units, overwrite=False):
     return decorator
 
 
-def s(series_Dz):
+def s(Zs_and_Js):
     """sums elements in series
 
     Notes
     ---------
     .. math::
         Z = Z_1 + Z_2 + ... + Z_n
-        dZ_dp = dZ_1_dp + dZ_2_dp + ... + dZ_n_dp
+
+    The Jacobian would add up, however the parameters list also expands. Hence,
+    .. math::
+        \\frac{dZ}{d[p_1, p_2, ...]
+        = [(\\frac{dZ}{dp})_1, (\\frac{dZ}{dp})_2, ...]
 
     """
-    # series, Dz = series_Dz if isinstance(series_Dz,(tuple)) \
-    #                         else (series_Dz, None)
-    # Series should have 2 elements -- check if this is true
-    if isinstance(series_Dz[0], (tuple)):  # Passed z and dz/dp
-        series = []
-        Dz = []
-        for s_, dz_ in series_Dz:
-            series.append(s_)
-            Dz.append(dz_)
+    if isinstance(Zs_and_Js[0], (tuple)):  # Passed Zs and Js
+        Zs = []
+        Js = []
+        for s_, dz_ in Zs_and_Js:
+            Zs.append(s_)
+            Js.append(dz_)
     else:
-        series = series_Dz
-        Dz = None
+        Zs = Zs_and_Js
+        Js = None
 
-    z = len(series[0]) * [0 + 0 * 1j]
-    for elem in series:
-        z += elem
-    if Dz is None:
-        return z
-    dzdp = []
-    for dz in Dz:
-        dzdp.extend(dz)
-    return (z, dzdp)
+    Zout = len(Zs[0]) * [0 + 0 * 1j]
+    for Z in Zs:
+        Zout += Z
+    if Js is None:
+        return Zout
+    Jout = []
+    for dz in Js:
+        Jout.extend(dz)
+    return (Zout, Jout)
 
 
-def p(parallel_Dz):
+def p(Zs_and_Js):
     """adds elements in parallel
 
     Notes
     ---------
     .. math::
-
         Z = \\frac{1}{\\frac{1}{Z_1} + \\frac{1}{Z_2} + ... + \\frac{1}{Z_n}}
-        Since
-        \\frac{1}{Z} = \\frac{1}{Z_1} + \\frac{1}{Z_2} + ... + \\frac{1}{Z_n}
-        \\frac{Dz}{Z^2} = \\frac{DZ_1}{Z_1^2} + \\frac{DZ_1}{Z_2^2} + ...
+
+    If each element of Zs_and_Js is a tuple, we need to calcualte the Jacobian.
+    Consider, ΔZ, the total change in out resistance is given as
+    .. math::
+        ΔZ = \\frac{Z^2}{Z_1^2}ΔZ_1 + \\frac{Z^2}{Z_2^2}ΔZ_2 + ...
+
+    Now, if $p_{k-1}$, $p_{k-2}$, ... are the parameters of $Z_k$,
+    .. math::
+        ΔZ_k = \\frac{∂Z_k(f_i)}{∂p_{k-j}} × [Δp_{k-1}, Δp_{k-1}, ...]^T
+
+    Hence the effective output Jacobian becomes
+    .. math::
+        J = [\\frac{Z^2}{Z_1^2}×\\frac{∂Z_1(f_i)}{∂p_{1-j}},...]
     """
-    # parallel, Dz = parallel_Dz if isinstance(parallel_Dz,(tuple)) \
-    #                         else (parallel_Dz, None)
-    if isinstance(parallel_Dz[0], (tuple)):  # Passed z and dz/dp
-        parallel = []
-        Dz = []
-        for p_, dz_ in parallel_Dz:
-            parallel.append(p_)
-            Dz.append(dz_)
+
+    if isinstance(Zs_and_Js[0], (tuple)):  # Passed Zs and Js
+        Zs = []
+        Js = []
+        for p_, dz_ in Zs_and_Js:
+            Zs.append(p_)
+            Js.append(dz_)
     else:
-        parallel = parallel_Dz
-        Dz = None
+        Zs = Zs_and_Js
+        Js = None
 
-    z = len(parallel[0]) * [0 + 0 * 1j]
-    for elem in parallel:
+    z = len(Zs[0]) * [0 + 0 * 1j]
+    for elem in Zs:
         z += 1 / elem
-    zp = 1 / z
-    if Dz is None:
-        return zp
+    Zout = 1 / z
+    if Js is None:
+        return Zout
 
-    dzdp = []
-    for elem, dzs in zip(parallel, Dz):
-        for dz in dzs:
-            dz *= zp**2/elem**2
-            dzdp += [dz]
-    return zp, dzdp
+    Jout = []
+    for elem, Js in Zs_and_Js:
+        for J in Js:
+            J *= Zout**2/elem**2
+            Jout += [J]
+    return (Zout, Jout)
 
 
 # manually add parallel and series operators to circuit elements w/o metadata
@@ -142,7 +156,7 @@ circuit_elements = {"s": s, "p": p}
 
 
 @element(num_params=1, units=["Ohm"])
-def R(p, f, dzdp):
+def R(p, f, Js):
     """defines a resistor
 
     Notes
@@ -154,15 +168,15 @@ def R(p, f, dzdp):
     """
     R = p[0]
     Z = np.array(len(f) * [R], dtype=complex)
-    if dzdp is None:
+    if Js is None:
         return Z
-    if dzdp[0] is not None:
-        dzdp[0][:] = np.ones(len(f), dtype=complex)
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = np.ones(len(f), dtype=complex)
+    return (Z, Js)
 
 
 @element(num_params=1, units=["F"])
-def C(p, f, dzdp):
+def C(p, f, Js):
     """defines a capacitor
 
     .. math::
@@ -173,15 +187,15 @@ def C(p, f, dzdp):
     omega = 2 * np.pi * np.array(f)
     C = p[0]
     Z = 1.0 / (C * 1j * omega)
-    if dzdp is None:
+    if Js is None:
         return Z
-    if dzdp[0] is not None:
-        dzdp[0][:] = -1.0 / (C**2 * 1j * omega)
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = -1.0 / (C**2 * 1j * omega)
+    return (Z, Js)
 
 
 @element(num_params=1, units=["H"])
-def L(p, f, dzdp):
+def L(p, f, Js):
     """defines an inductor
 
     .. math::
@@ -192,15 +206,15 @@ def L(p, f, dzdp):
     omega = 2 * np.pi * np.array(f)
     L = p[0]
     Z = L * 1j * omega
-    if dzdp is None:
+    if Js is None:
         return Z
-    if dzdp[0] is not None:
-        dzdp[0][:] = 1j * omega
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = 1j * omega
+    return (Z, Js)
 
 
 @element(num_params=1, units=["Ohm sec^-1/2"])
-def W(p, f, dzdp):
+def W(p, f, Js):
     """defines a semi-infinite Warburg element
 
     Notes
@@ -212,15 +226,15 @@ def W(p, f, dzdp):
     omega = 2 * np.pi * np.array(f)
     Aw = p[0]
     Z = Aw * (1 - 1j) / np.sqrt(omega)
-    if dzdp is None:
+    if Js is None:
         return Z
-    if dzdp[0] is not None:
-        dzdp[0][:] = (1 - 1j) / np.sqrt(omega)
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = (1 - 1j) / np.sqrt(omega)
+    return (Z, Js)
 
 
 @element(num_params=2, units=["Ohm", "sec"])
-def Wo(p, f, dzdp):
+def Wo(p, f, Js):
     """defines an open (finite-space) Warburg element
 
     Notes
@@ -244,7 +258,7 @@ def Wo(p, f, dzdp):
     tanh[mask] = np.tanh(arg[mask])
 
     Z = Z0 / (arg * tanh)
-    if dzdp is None:
+    if Js is None:
         return Z
 
     # d/dx coth = -csch^2
@@ -255,15 +269,15 @@ def Wo(p, f, dzdp):
     #            = -Z0/arg*coth * (arg^-1) * arg/(2*tau)
     # (d/dtau) z = - Z0/arg*csch^2*arg'  [2nd part]
     #            = -Z0/arg*csch^2*(arg/(2*tau))
-    if dzdp[0] is not None:
-        dzdp[0][:] = Z / Z0
-    if dzdp[1] is not None:
-        dzdp[1][:] = - Z / (2 * tau) - Z0 * csch2 / (2 * tau)
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = Z / Z0
+    if Js[1] is not None:
+        Js[1][:] = - Z / (2 * tau) - Z0 * csch2 / (2 * tau)
+    return (Z, Js)
 
 
 @element(num_params=2, units=["Ohm", "sec"])
-def Ws(p, f, dzdp):
+def Ws(p, f, Js):
     """defines a short (finite-length) Warburg element
 
     Notes
@@ -286,22 +300,22 @@ def Ws(p, f, dzdp):
     tanh[mask] = np.tanh(arg[mask])
 
     Z = Z0 * tanh / arg
-    if dzdp is None:
+    if Js is None:
         return Z
 
     # d/dx tanh = sech^2
     sech2 = np.zeros_like(arg, dtype=complex)
     sech2[mask] = 1.0 / (np.cosh(arg[mask])**2)
 
-    if dzdp[0] is not None:
-        dzdp[0][:] = Z / Z0
-    if dzdp[1] is not None:
-        dzdp[1][:] = Z0 * sech2 / (2 * tau) - Z / (2 * tau)
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = Z / Z0
+    if Js[1] is not None:
+        Js[1][:] = Z0 * sech2 / (2 * tau) - Z / (2 * tau)
+    return (Z, Js)
 
 
 @element(num_params=2, units=["Ohm^-1 sec^a", ""])
-def CPE(p, f, dzdp):
+def CPE(p, f, Js):
     """defines a constant phase element
 
     Notes
@@ -315,20 +329,20 @@ def CPE(p, f, dzdp):
     omega = 2 * np.pi * np.array(f)
     Q, alpha = p[0], p[1]
     Z = 1.0 / (Q * (1j * omega) ** alpha)
-    if dzdp is None:
+    if Js is None:
         return Z
 
     # da^x/dx = lna * a^x
     # dZ/dalpha = -z/(1j*omega)**alpha) * (1j*omega)**alpha*ln(1j*omega)
-    if dzdp[0] is not None:
-        dzdp[0][:] = - Z / Q
-    if dzdp[1] is not None:
-        dzdp[1][:] = - Z * np.log(1j * omega)
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = - Z / Q
+    if Js[1] is not None:
+        Js[1][:] = - Z * np.log(1j * omega)
+    return (Z, Js)
 
 
 @element(num_params=2, units=["H sec", ""])
-def La(p, f, dzdp):
+def La(p, f, Js):
     """defines a modified inductance element as represented in [1]
 
     Notes
@@ -345,18 +359,18 @@ def La(p, f, dzdp):
     omega = 2 * np.pi * np.array(f)
     L, alpha = p[0], p[1]
     Z = (L * 1j * omega) ** alpha
-    if dzdp is None:
+    if Js is None:
         return Z
 
-    if dzdp[0] is not None:
-        dzdp[0][:] = alpha * Z / L
-    if dzdp[1] is not None:
-        dzdp[1][:] = Z * np.log(L * 1j * omega)
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = alpha * Z / L
+    if Js[1] is not None:
+        Js[1][:] = Z * np.log(L * 1j * omega)
+    return (Z, Js)
 
 
 @element(num_params=2, units=["Ohm", "sec"])
-def G(p, f, dzdp):
+def G(p, f, Js):
     """defines a Gerischer Element as represented in [1]
 
     Notes
@@ -392,18 +406,18 @@ def G(p, f, dzdp):
     R_G, t_G = p[0], p[1]
     u = np.sqrt(1 + 1j * omega * t_G)
     Z = R_G / u
-    if dzdp is None:
+    if Js is None:
         return Z
 
-    if dzdp[0] is not None:
-        dzdp[0][:] = Z / R_G
-    if dzdp[1] is not None:
-        dzdp[1][:] = - Z * 1j * omega / (2 * u**2)
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = Z / R_G
+    if Js[1] is not None:
+        Js[1][:] = - Z * 1j * omega / (2 * u**2)
+    return (Z, Js)
 
 
 @element(num_params=3, units=["Ohm", "sec", ""])
-def Gs(p, f, dzdp):
+def Gs(p, f, Js):
     """defines a finite-length Gerischer Element as represented in [1]
 
     Notes
@@ -430,12 +444,12 @@ def Gs(p, f, dzdp):
     tanh[mask] = np.tanh(arg[mask])
 
     Z = R_G / (np.sqrt(1 + 1j * omega * t_G) * tanh)
-    if dzdp is None:
+    if Js is None:
         return Z
 
     # u = np.sqrt(1 + 1j * omega * t_G) = arg/phi
-    if dzdp[0] is not None:
-        dzdp[0][:] = Z / R_G
+    if Js[0] is not None:
+        Js[0][:] = Z / R_G
 
     """
     Z=R_G/(np.sqrt(1+1j*omega*t_G)*tanh(arg))
@@ -448,8 +462,8 @@ def Gs(p, f, dzdp):
     argp = np.sqrt(1 + 1j * omega * t_G)
     csch2 = np.zeros_like(arg, dtype=complex)
     csch2[mask] = 1.0 / (np.sinh(arg[mask])**2)
-    if dzdp[1] is not None:
-        dzdp[1][:] = - Z * 1j * omega / (2 * argp ** 2) \
+    if Js[1] is not None:
+        Js[1][:] = - Z * 1j * omega / (2 * argp ** 2) \
                  - R_G * 1j * omega * phi**3 * csch2 / (2 * arg**2)
 
     """
@@ -459,13 +473,13 @@ def Gs(p, f, dzdp):
     Since cosh(2*arg) - 1 = cosh^2(arg) + sinh^2(arg) - 1 = 2 sinh^2(arg)
     diff(Z,phi) = -R_G/sinh^2(arg)
     """
-    if dzdp[2] is not None:
-        dzdp[2][:] = - R_G * csch2
-    return (Z, dzdp)
+    if Js[2] is not None:
+        Js[2][:] = - R_G * csch2
+    return (Z, Js)
 
 
 @element(num_params=2, units=["Ohm", "sec"])
-def K(p, f, dzdp):
+def K(p, f, Js):
     """An RC element for use in lin-KK model
 
     Notes
@@ -478,18 +492,18 @@ def K(p, f, dzdp):
     omega = 2 * np.pi * np.array(f)
     R, tau_k = p[0], p[1]
     Z = R / (1 + 1j * omega * tau_k)
-    if dzdp is None:
+    if Js is None:
         return Z
 
-    if dzdp[0] is not None:
-        dzdp[0][:] = Z / R
-    if dzdp[1] is not None:
-        dzdp[1][:] = - Z * 1j * omega / (1 + 1j * omega * tau_k)
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = Z / R
+    if Js[1] is not None:
+        Js[1][:] = - Z * 1j * omega / (1 + 1j * omega * tau_k)
+    return (Z, Js)
 
 
 @element(num_params=3, units=['Ohm', 'sec', ''])
-def Zarc(p, f, dzdp):
+def Zarc(p, f, Js):
     """ An RQ element rewritten with resistance and
     and time constant as paramenters. Equivalent to a
     Cole-Cole relaxation in dielectrics.
@@ -504,22 +518,22 @@ def Zarc(p, f, dzdp):
     omega = 2 * np.pi * np.array(f)
     R, tau_k, gamma = p[0], p[1], p[2]
     Z = R / (1 + ((1j * omega * tau_k) ** gamma))
-    if dzdp is None:
+    if Js is None:
         return Z
 
-    if dzdp[0] is not None:
-        dzdp[0][:] = Z / R
-    if dzdp[1] is not None:
-        dzdp[1][:] = - Z**2 / R * gamma * ((1j * omega * tau_k) ** gamma) \
+    if Js[0] is not None:
+        Js[0][:] = Z / R
+    if Js[1] is not None:
+        Js[1][:] = - Z**2 / R * gamma * ((1j * omega * tau_k) ** gamma) \
                     / tau_k
-    if dzdp[2] is not None:
-        dzdp[2][:] = - Z**2 / R * ((1j * omega * tau_k) ** gamma) \
+    if Js[2] is not None:
+        Js[2][:] = - Z**2 / R * ((1j * omega * tau_k) ** gamma) \
                      * np.log(1j * omega * tau_k)
-    return (Z, dzdp)
+    return (Z, Js)
 
 
 @element(num_params=3, units=["Ohm", "F sec^(gamma - 1)", ""])
-def TLMQ(p, f, dzdp):
+def TLMQ(p, f, Js):
     """Simplified transmission-line model as defined in Eq. 11 of [1]
 
     Notes
@@ -545,21 +559,21 @@ def TLMQ(p, f, dzdp):
     tanh[mask] = np.tanh(arg[mask])
 
     Z = np.sqrt(Rion * Zs) / tanh
-    if dzdp is None:
+    if Js is None:
         return Z
     csch2 = np.zeros_like(arg, dtype=complex)
     csch2[mask] = 1.0 / (np.sinh(arg[mask])**2)
-    if dzdp[0] is not None:
-        dzdp[0][:] = Z / (2 * Rion) - 0.5 * csch2
-    if dzdp[1] is not None:
-        dzdp[1][:] = - Z / (2 * Qs) - Rion * csch2 / (2 * Qs)
-    if dzdp[2] is not None:
-        dzdp[2][:] = (- Z - Rion * csch2) * 0.5 * np.log(1j * omega)
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = Z / (2 * Rion) - 0.5 * csch2
+    if Js[1] is not None:
+        Js[1][:] = - Z / (2 * Qs) - Rion * csch2 / (2 * Qs)
+    if Js[2] is not None:
+        Js[2][:] = (- Z - Rion * csch2) * 0.5 * np.log(1j * omega)
+    return (Z, Js)
 
 
 @element(num_params=4, units=["Ohm-m^2", "Ohm-m^2", "", "sec"])
-def T(p, f, dzdp):
+def T(p, f, Js):
     """A macrohomogeneous porous electrode model from Paasch et al. [1]
 
     Notes
@@ -603,7 +617,7 @@ def T(p, f, dzdp):
     tanh[mask] = np.tanh(beta[mask])
 
     Z = A / (beta * tanh) + B / (beta * sinh)
-    if dzdp is None:
+    if Js is None:
         return Z
 
     coth = 1.0 / tanh
@@ -612,15 +626,15 @@ def T(p, f, dzdp):
         A * (- coth / beta**2 - csch**2 / beta) + \
         B * (- csch / beta**2 - csch * coth / beta)
 
-    if dzdp[0] is not None:
-        dzdp[0][:] = coth / beta
-    if dzdp[1] is not None:
-        dzdp[1][:] = csch / beta
-    if dzdp[2] is not None:
-        dzdp[2][:] = dz_dbeta / (2 * beta)
-    if dzdp[3] is not None:
-        dzdp[3][:] = dz_dbeta * 1j * omega / (2 * beta)
-    return (Z, dzdp)
+    if Js[0] is not None:
+        Js[0][:] = coth / beta
+    if Js[1] is not None:
+        Js[1][:] = csch / beta
+    if Js[2] is not None:
+        Js[2][:] = dz_dbeta / (2 * beta)
+    if Js[3] is not None:
+        Js[3][:] = dz_dbeta * 1j * omega / (2 * beta)
+    return (Z, Js)
 
 
 def get_element_from_name(name):
@@ -642,4 +656,18 @@ def typeChecker(p, f, name, length):
     assert len(p) == length, "in {}, input list must be length {}".format(
         name, length
     )
+    return
+
+
+def jacChecker(Js, f, name, length):
+    assert isinstance(Js, list), \
+        "in {}, Js-input must be of type list".format(name)
+    assert len(Js) == length, \
+        "in {}, gradinet list must be length {}".format(name, length)
+    Nf = len(f)
+    for dz in Js:
+        assert isinstance(dz, (np.ndarray)), \
+            "in {}, value {} in {} must be a numpy array".format(name, dz, Js)
+        assert len(dz) == Nf, \
+            "in {}, len({}) must be equal to {}".format(name, dz, Nf)
     return
