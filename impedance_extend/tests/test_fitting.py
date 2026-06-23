@@ -1,4 +1,6 @@
 import time
+import pytest
+
 from impedance_extend.preprocessing import ignoreBelowX
 from impedance_extend.models.circuits.fitting import buildCircuit, \
     circuit_fit, rmse, extract_circuit_elements, \
@@ -203,8 +205,8 @@ def test_circuit_fit_least_squares_comparejac(track_diff):
                             initial_guess, constants={},
                             optimizations=optimizations.copy(),
                             scale=scale, bounds=bounds, use_jac=False)[0]
-        data = {}
-        data["without JAC"] = time.perf_counter() - start
+        track_data = {}
+        track_data["without JAC"] = time.perf_counter() - start
         f = np.array(frequencies, dtype=float)
         Z_fit1 = builtCircuit(f, calc1)
         start = time.perf_counter()
@@ -212,12 +214,24 @@ def test_circuit_fit_least_squares_comparejac(track_diff):
                             initial_guess, constants={},
                             optimizations=optimizations.copy(),
                             scale=scale, bounds=bounds)[0]
-        data["with JAC"] = time.perf_counter() - start
-        track_diff[circuit] = data
+        track_data["with JAC"] = time.perf_counter() - start
         Z_fit2 = builtCircuit(f, calc2)
-        err = rmse(Z_fit1, Z_fit2)
-        assert np.allclose(calc1, calc2, rtol=1e-1) or err <= rmse_limit, \
-            f'Failed {circuit}: {calc1} != {calc2}; RMSE={err}'
+        start = time.perf_counter()
+        calc3 = circuit_fit(frequencies, Z_data, circuit,
+                            initial_guess, constants={},
+                            optimizations=optimizations.copy(),
+                            scale=scale, bounds=bounds,
+                            runchecks=False)[0]
+        track_data["with JAC & no runchecks"] = time.perf_counter() - start
+        Z_fit3 = builtCircuit(f, calc3)
+        track_diff[circuit] = track_data
+
+        err12 = rmse(Z_fit1, Z_fit2)
+        assert np.allclose(calc1, calc2, rtol=1e-1) or err12 <= rmse_limit, \
+            f'Failed {circuit}: {calc1} != {calc2}; RMSE={err12}'
+        err13 = rmse(Z_fit1, Z_fit3)
+        assert np.allclose(calc1, calc3, rtol=1e-1) or err13 <= rmse_limit, \
+            f'Failed {circuit}: {calc1} != {calc3}; RMSE={err13}'
 
 
 def test_circuit_fit_ga():
@@ -324,12 +338,39 @@ def test_circuit_fit_softconstraint():
     def soft_constraint(p):
         ret = 10*sig(p[0]*p[1]-p[2]*p[3])
         return ret
-
     optimizations = [{'algorithm': 'pygad'},
                      {'algorithm': 'least_squares'}]
-    calc = circuit_fit(frequencies, Z, circuit, initial_guess,
-                       constants=constants, optimizations=optimizations.copy(),
-                       bounds=bounds, soft_constraint=soft_constraint)[0]
+    with pytest.warns(UserWarning) as record:
+        calc = circuit_fit(frequencies, Z, circuit, initial_guess,
+                           constants=constants, bounds=bounds,
+                           optimizations=optimizations.copy(),
+                           soft_constraint=soft_constraint)[0]
+    has_warn = False
+    while len(record) > 0:
+        w = record.pop(UserWarning)
+        if str(w.message) == "soft_constraint_jac is missing or invalid.":
+            has_warn = True
+    assert has_warn, 'Not warning about soft_constraint_jac'
+    assert calc[0]*calc[1] <= calc[2]*calc[3]
+
+    def dsig(x):
+        return 10 * np.exp(-10*x) / (1 + np.exp(-10*x)) ** 2
+
+    def soft_constraint_jac(p):
+        ret = np.array([[p[1], p[0], -p[3], -p[2], 0]])*10*dsig(p)
+        return ret
+    with pytest.warns(UserWarning) as record:
+        calc = circuit_fit(frequencies, Z, circuit, initial_guess,
+                           constants=constants, bounds=bounds,
+                           optimizations=optimizations.copy(),
+                           soft_constraint=soft_constraint,
+                           soft_constraint_jac=soft_constraint_jac)[0]
+    has_warn = False
+    while len(record) > 0:
+        w = record.pop(UserWarning)
+        if str(w.message) == "soft_constraint_jac is missing or invalid.":
+            has_warn = True
+    assert not has_warn, 'Not using soft_constraint_jac'
     assert calc[0]*calc[1] <= calc[2]*calc[3]
 
 
@@ -404,6 +445,54 @@ def test_buildCircuit():
     assert subsitute_values(buildCircuit(circuit, constants={})[0],
                             frequencies, params).replace(' ', '') == \
         'R([100.0],[1000.0,5.0,0.01])'
+
+
+def test_buildCircuit_runchecks():
+
+    # Test simple Randles circuit with CPE
+    circuit = 'R0-p(R1-Wo1,CPE1)'
+    params = [.1, .01, 1, 1000, 15, .9]
+    frequencies = [1000.0, 5.0, 0.01]
+
+    text = subsitute_values(buildCircuit(circuit, constants={},
+                                         runchecks=False)[0],
+                            frequencies, params).replace(' ', '')
+    assert text == \
+        's([R([0.1],[1000.0,5.0,0.01],runchecks=False),' + \
+        'p([s([R([0.01],[1000.0,5.0,0.01],runchecks=False),' + \
+        'Wo([1.0,1000.0],[1000.0,5.0,0.01],runchecks=False)]),' + \
+        'CPE([15.0,0.9],[1000.0,5.0,0.01],runchecks=False)])])'
+
+
+def test_buildCircuit_compare_runchecks(track_diff):
+    data = get_data()
+
+    for circuit, initial_guess, scale, results, bounds, frequencies, \
+            Z_data in data:
+        track_data = {}
+        f = np.array(frequencies, dtype=float)
+        constants = {}
+        buildCircuit_text = buildCircuit(circuit, constants=constants,
+                                         eval_string='', index=0)[0]
+        builtCircuit = eval('lambda frequencies,parameters : ' +
+                            buildCircuit_text, circuit_elements)
+        start = time.perf_counter()
+        for _ in range(100):
+            builtCircuit(f, initial_guess)
+        track_data["with runchecks"] = time.perf_counter() - start
+
+        buildCircuit_text = buildCircuit(circuit, constants=constants,
+                                         eval_string='', index=0,
+                                         runchecks=False)[0]
+        builtCircuit = eval('lambda frequencies,parameters : ' +
+                            buildCircuit_text, circuit_elements)
+        start = time.perf_counter()
+        for _ in range(100):
+            builtCircuit(f, initial_guess)
+        track_data["without runchecks"] = time.perf_counter() - start
+
+        # track_diff["100x"+circuit] = track_data
+        track_diff["100x"+circuit] = track_data
 
 
 def test_RMSE():

@@ -33,4 +33,6 @@ Illustration of the different optimization algorithms (AI generated).
 `Plevris et al. <https://joss.theoj.org/papers/10.21105/joss.02349>`_ `10.21105/joss.02349 <https://doi.org/10.21105/joss.02349>`_
 may provide better insights into the optimization problem (providing a head-to-head comparison between GA and PSO-based optimization and classical optimization for a wide rage of multi-parameter functions).
 
-
+Additionally, `impedance_extend` adds exact Jacobian to the parameters and an option to disable runtime checks. 
+Sample fitting for R0-p(R1,C1)-p(R2-Wo1,C2) indicates that the use of exact Jacobian can decrease least_squares fitting time by a factor of 5 (i.e. a 5-fold speed-up).
+Additionally, disabling run time checks (while not recommended) can decrease fitting time by a factor of 2 for all algorithms.

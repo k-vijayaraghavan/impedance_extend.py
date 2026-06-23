@@ -193,7 +193,7 @@ def pow_of_10(num, dirn=0):
 def circuit_fit(frequencies, impedances, circuit, initial_guess,
                 constants={}, bounds=None, weight_by_modulus=False,
                 global_opt=False, optimizations=[], scale=None,
-                **kwargs):
+                runchecks=True, **kwargs):
 
     """ Main function for fitting an equivalent circuit to data.
 
@@ -266,11 +266,16 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         R-s might be in ~0.1 ohms; we can pass [0.1,1e-6].
         Internally the parameters are divided by scale during optimization.
 
+    runchecks : boolean, optional
+        This parameter gets passed to elements. When runchecks =  False,
+        the elements do not perform input checks (this would improve speed).
+
     kwargs :
         Keyword arguments passed to scipy.optimize.curve_fit or
         scipy.optimize.basinhopping
         One can also pass a callable soft_constraint that adds a penalty
-        for arbitary constraints.
+        for arbitary constraints. In this case, it is recommended to pass a
+        callable soft_constraint_jac that calculates the Jacobian.
 
     Returns
     ------------
@@ -293,6 +298,9 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
     kwargs_org = kwargs.copy()
     f = np.array(frequencies, dtype=float)
     Z = np.array(impedances, dtype=complex)
+
+    if not runchecks:
+        warn("Not checking run parameters")
 
     if global_opt:
         warn('global_opt has been deprecated. Use optimizations='
@@ -335,19 +343,22 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         use_jac = kwargs.pop("use_jac", not callable(algo))
     else:
         use_jac = False
-
     if callable(algo) or algo in ('pygad', 'pyswarms', 'least_squares'):
         n_soft_constraint = 0
         if 'soft_constraint' in kwargs:
             soft_constraint = kwargs.pop('soft_constraint')
+            soft_constraint_jac = kwargs.pop('soft_constraint_jac', None)
             n_soft_constraint = 1
-        if use_jac:
-            if n_soft_constraint > 0:
-                if 'soft_constraint_jac' in kwargs:
-                    soft_constraint_jac = kwargs.pop('soft_constraint_jac')
-                else:
-                    warnings.warn("soft_constraint_jac is missing.")
-                    use_jac = False
+        if use_jac and n_soft_constraint > 0:
+            try:
+                jac_test = np.array(soft_constraint_jac(initial_guess))
+                Nr, Nc = n_soft_constraint, len(initial_guess)
+                if jac_test.shape != (Nr, Nc):
+                    raise ValueError("soft_constraint_jac must return a"
+                                     f" {Nr}x{Nc} numpy array")
+            except Exception:
+                warnings.warn("soft_constraint_jac is missing or invalid.")
+                use_jac = False
 
         if weight_by_modulus:
             abs_Z = np.abs(Z)
@@ -698,7 +709,7 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
                           initial_guess=popt, constants=constants,
                           bounds=bounds_, weight_by_modulus=weight_by_modulus,
                           global_opt=False, optimizations=optimizations,
-                          scale=scale, use_jac=use_jac, **kwargs_org)
+                          scale=scale, runchecks=runchecks, **kwargs_org)
         if ret_obj:
             if len(ret) < 3:
                 ret.append((res, scale))
@@ -710,10 +721,11 @@ def circuit_fit(frequencies, impedances, circuit, initial_guess,
         return [popt, perror, (res, scale)] if ret_obj else [popt, perror]
 
 
-def wrapCircuit(circuit, constants, addn=0, retun_jac=False):
+def wrapCircuit(circuit, constants, addn=0, retun_jac=False, runchecks=True):
     """ wraps function so we can pass the circuit string """
     buildCircuit_text = buildCircuit(circuit, constants=constants,
-                                     eval_string='', index=0)[0]
+                                     eval_string='', index=0,
+                                     runchecks=runchecks)[0]
     builtCircuit = eval('lambda frequencies,parameters : ' +
                         buildCircuit_text, circuit_elements)
 
@@ -746,7 +758,8 @@ def wrapCircuit(circuit, constants, addn=0, retun_jac=False):
         return wrappedCircuit, None
 
     buildJac_text = buildCircuit(circuit, constants=constants, jac=True,
-                                 eval_string='', index=0)[0]
+                                 eval_string='', index=0,
+                                 runchecks=runchecks)[0]
     builtJac = eval('lambda frequencies,parameters,dzdp : ' +
                     buildJac_text, circuit_elements)
 
@@ -777,7 +790,8 @@ def wrapCircuit(circuit, constants, addn=0, retun_jac=False):
     return wrappedCircuit, wrappedJac
 
 
-def buildCircuit(circuit, constants=None, jac=False, eval_string='', index=0):
+def buildCircuit(circuit, constants=None, jac=False, eval_string='', index=0,
+                 runchecks=True):
     """ recursive function that transforms a circuit, parameters, and
     frequencies into a string that can be evaluated
 
@@ -869,7 +883,7 @@ def buildCircuit(circuit, constants=None, jac=False, eval_string='', index=0):
         if ',' in elem or '-' in elem:
             eval_string, index = buildCircuit(elem, constants=constants,
                                               jac=jac, eval_string=eval_string,
-                                              index=index)
+                                              index=index, runchecks=runchecks)
         else:
             # Return a string that can be used to construct a lambda function
             # lambda f,p : R(f,[p[0],const1,p[1]...])
@@ -896,7 +910,8 @@ def buildCircuit(circuit, constants=None, jac=False, eval_string='', index=0):
             param_string = "[" + ','.join(param_list) + "]"
             jac_string = "[" + ','.join(jac_list) + "]"
             new = raw_elem + '(' + param_string + ', frequencies' + \
-                (')' if not jac else f', {jac_string})')
+                ('' if not jac else f', {jac_string}') + \
+                ('' if runchecks else ', runchecks=False') + ")"
             eval_string += new
 
         if i == len(split) - 1:

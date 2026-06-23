@@ -62,7 +62,7 @@ class BaseCircuit:
             raise TypeError('Comparing object is not of the same type.')
 
     def fit(self, frequencies, impedance, bounds=None,
-            weight_by_modulus=False, **kwargs):
+            weight_by_modulus=False, runchecks=True, **kwargs):
         """ Fit the circuit model
 
         Parameters
@@ -82,6 +82,11 @@ class BaseCircuit:
             Uses the modulus of each data (|Z|) as the weighting factor.
             Standard weighting scheme when experimental variances are
             unavailable. Only applicable when global_opt = False
+
+        runchecks : boolean, optional
+            This parameter gets passed to circuit_fit and to elements. When
+            runchecks =  False, the elements do not perform input checks (this
+            would improve speed).
 
         kwargs :
             Keyword arguments passed to
@@ -103,7 +108,7 @@ class BaseCircuit:
         if self.initial_guess != []:
             ret = circuit_fit(frequencies, impedance, self.circuit,
                               self.initial_guess, constants=self.constants,
-                              bounds=bounds,
+                              bounds=bounds, runchecks=runchecks,
                               weight_by_modulus=weight_by_modulus, **kwargs)
             self.parameters_ = ret[0]
             if ret[1] is not None:

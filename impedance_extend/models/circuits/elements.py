@@ -35,13 +35,16 @@ def element(num_params, units, overwrite=False):
             Pass p=[param[k],param[k+1],...] or param[k:(k+np)], and
             Js=[Js[:,k],Js[:,k+1],...] (Note: you cannot pass numpy array)
             If the j-th parameter is constant, pass Js[j]=None
+    The wrapper also accepts and additonal parameter runchecks (default True).
+    When runchecks=False, parameter checks are not performed to improve speed.
     """
 
     def decorator(func):
-        def wrapper(p, f, J=None):
-            typeChecker(p, f, func.__name__, num_params)
-            if J is not None:
-                jacChecker(J, f, func.__name__, num_params)
+        def wrapper(p, f, J=None, runchecks=True):
+            if runchecks:
+                typeChecker(p, f, func.__name__, num_params)
+                if J is not None:
+                    jacChecker(J, f, func.__name__, num_params)
             return func(p, f, J)
 
         wrapper.num_params = num_params
@@ -665,9 +668,11 @@ def jacChecker(Js, f, name, length):
     assert len(Js) == length, \
         "in {}, gradinet list must be length {}".format(name, length)
     Nf = len(f)
-    for dz in Js:
-        assert isinstance(dz, (np.ndarray)), \
-            "in {}, value {} in {} must be a numpy array".format(name, dz, Js)
-        assert len(dz) == Nf, \
-            "in {}, len({}) must be equal to {}".format(name, dz, Nf)
+    for J in Js:
+        if J is None:
+            continue
+        assert isinstance(J, (np.ndarray)), \
+            "in {}, value {} in {} must be a numpy array".format(name, J, Js)
+        assert len(J) == Nf, \
+            "in {}, len({}) must be equal to {}".format(name, J, Nf)
     return
